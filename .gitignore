@@ -1,0 +1,5 @@
+/target
+/migrations
+/result
+.env
+.direnv
