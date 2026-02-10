@@ -2,6 +2,7 @@
 
 use std::io::Write;
 
+use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use diesel::{
@@ -11,6 +12,7 @@ use diesel::{
 };
 
 use crate::database::schema;
+use crate::database::schema::sql_types::AccessibilityType;
 
 #[derive(
     diesel_derive_enum::DbEnum,
@@ -59,6 +61,74 @@ pub enum TshirSize {
     XXL,
 }
 
+#[derive(
+    diesel_derive_enum::DbEnum,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[ExistingTypePath = "crate::database::schema::sql_types::Gender"]
+#[serde(rename_all = "snake_case")]
+pub enum Gender {
+    Man,
+    Woman,
+    Nonbinary,
+    Agender,
+    Other,
+    Unspecified,
+}
+
+#[derive(
+    diesel_derive_enum::DbEnum,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[ExistingTypePath = "crate::database::schema::sql_types::Discovery"]
+#[serde(rename_all = "snake_case")]
+pub enum Discovery {
+    SocialMedia,
+    Website,
+    Acquaintances,
+    Posters,
+    Other,
+}
+
+#[derive(
+    diesel_derive_enum::DbEnum,
+    Debug,
+    Clone,
+    Copy,
+    Eq,
+    PartialEq,
+    PartialOrd,
+    Ord,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[ExistingTypePath = "crate::database::schema::sql_types::Status"]
+#[serde(rename_all = "snake_case")]
+pub enum Status {
+    Applied,
+    Accepted,
+    Disqualified,
+}
+
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize, diesel::FromSqlRow, diesel::AsExpression)]
     #[diesel(sql_type = AccessibilityType)]
@@ -69,10 +139,6 @@ bitflags::bitflags! {
         const OTHER = 0b1000;
     }
 }
-
-#[derive(diesel::SqlType)]
-#[diesel(postgres_type(name = "Int2"))]
-pub struct AccessibilityType;
 
 impl ToSql<AccessibilityType, Pg> for AccessibilityNeeds {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
@@ -105,8 +171,6 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
     Debug,
     Clone,
     PartialEq,
-    Eq,
-    Hash,
     serde::Serialize,
     serde::Deserialize,
 )]
@@ -115,15 +179,29 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
     pub id: Uuid,
-    pub guardian_email: Option<String>,
     pub name: String,
-    pub pronouns: String,
-    pub country: String,
+    pub phone: String,
+    pub longitude: f32,
+    pub latitude: f32,
+    pub studies: String,
+    pub university: String,
+    pub gender: Gender,
+    pub discovery: Discovery,
     pub experience: Experience,
-    pub motivation: String,
+    pub first_time: bool,
+    pub why: String,
     pub tshirt_size: TshirSize,
-    pub dietary_preferences: serde_json::Value,
-    pub accessibility_needs: i16,
-    pub linkedin: String,
-    pub personal_page: String,
+    pub dietary_preference: Option<serde_json::Value>,
+    pub accessibility_needs: AccessibilityNeeds,
+    pub dvcs: Option<String>,
+    pub linkedin: Option<String>,
+    pub website: Option<String>,
+    pub allows_cv_sharing: bool,
+    pub allows_marketing: bool,
+    pub created_at: DateTime<Utc>,
+    pub check_in: Option<DateTime<Utc>>,
+    pub comment: String,
+    pub is_at_end: bool,
+    pub qr_code: String,
+    pub status: Status,
 }
