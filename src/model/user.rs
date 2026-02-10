@@ -17,6 +17,7 @@ use crate::database::schema::sql_types::AccessibilityType;
 #[derive(
     diesel_derive_enum::DbEnum,
     Debug,
+    Default,
     Clone,
     Copy,
     Eq,
@@ -33,6 +34,7 @@ pub enum Experience {
     Expert,
     Experienced,
     Inexperienced,
+    #[default]
     Aware,
     Newbie,
 }
@@ -40,6 +42,7 @@ pub enum Experience {
 #[derive(
     diesel_derive_enum::DbEnum,
     Debug,
+    Default,
     Clone,
     Copy,
     Eq,
@@ -55,6 +58,7 @@ pub enum Experience {
 pub enum TshirSize {
     XS,
     S,
+    #[default]
     M,
     L,
     XL,
@@ -64,6 +68,7 @@ pub enum TshirSize {
 #[derive(
     diesel_derive_enum::DbEnum,
     Debug,
+    Default,
     Clone,
     Copy,
     Eq,
@@ -82,12 +87,14 @@ pub enum Gender {
     Nonbinary,
     Agender,
     Other,
+    #[default]
     Unspecified,
 }
 
 #[derive(
     diesel_derive_enum::DbEnum,
     Debug,
+    Default,
     Clone,
     Copy,
     Eq,
@@ -101,6 +108,7 @@ pub enum Gender {
 #[ExistingTypePath = "crate::database::schema::sql_types::Discovery"]
 #[serde(rename_all = "snake_case")]
 pub enum Discovery {
+    #[default]
     SocialMedia,
     Website,
     Acquaintances,
@@ -111,6 +119,7 @@ pub enum Discovery {
 #[derive(
     diesel_derive_enum::DbEnum,
     Debug,
+    Default,
     Clone,
     Copy,
     Eq,
@@ -124,9 +133,12 @@ pub enum Discovery {
 #[ExistingTypePath = "crate::database::schema::sql_types::Status"]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
+    #[default]
     Applied,
     Accepted,
     Disqualified,
+    Finisher,
+    Winner,
 }
 
 bitflags::bitflags! {
@@ -164,6 +176,7 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
     }
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(
     Queryable,
     Identifiable,
@@ -178,6 +191,7 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
 #[diesel(table_name = schema::user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
+    #[serde(skip_deserializing)]
     pub id: Uuid,
     pub name: String,
     pub phone: String,
@@ -198,10 +212,13 @@ pub struct User {
     pub website: Option<String>,
     pub allows_cv_sharing: bool,
     pub allows_marketing: bool,
-    pub created_at: DateTime<Utc>,
-    pub check_in: Option<DateTime<Utc>>,
     pub comment: String,
-    pub is_at_end: bool,
+    #[serde(skip_deserializing)]
+    pub created_at: DateTime<Utc>,
+    #[serde(skip_deserializing)]
+    pub check_in: Option<DateTime<Utc>>,
+    #[serde(skip_deserializing)]
     pub qr_code: String,
+    #[serde(skip_deserializing)]
     pub status: Status,
 }

@@ -1,7 +1,10 @@
-use deadpool_diesel::{postgres::Connection, Manager, Pool as ConnectionPool, Runtime};
+use deadpool_diesel::{Manager, Pool as ConnectionPool, Runtime, postgres::Connection};
 use diesel::PgConnection;
 
-use tracing::{info, trace};
+use fastrace::prelude::*;
+
+use crate::error::Error;
+use exn::ResultExt;
 
 const MAX_POOL_SIZE: usize = 8;
 pub struct Pool(ConnectionPool<Manager<PgConnection>>);
@@ -16,15 +19,24 @@ impl Pool {
     /// # Errors
     /// An error will be returned if the database url is malformed or if a connection cannot
     /// be established.
-    pub async fn from_url(url: &str) -> Result<Self, ()> {
+    ///
+    /// # Panics
+    /// Never, the unwrap is for an infallible operation
+    pub async fn from_url(url: &str) -> exn::Result<Self, Error> {
         let manager = Manager::new(url, Runtime::Tokio1);
+
+        // Infallible!
         let pool = ConnectionPool::builder(manager)
             .max_size(MAX_POOL_SIZE)
             .build()
-            .map_err(|_| ())?; // Infallible, runtime is specified
+            .unwrap();
 
-        _ = pool.get().await.map_err(|_| ())?; // Check if pool is usable by attempting to get a connection
-        info!("Initial connection to pool successful.");
+        // Check if pool is usable by attempting to get a connection
+        let _ = pool.get().await.map_err(Error::from).or_raise(|| {
+            Error::upstream("Failed to get a test connection while building the pool".into())
+        })?;
+
+        LocalSpan::add_event(Event::new("Built databate pool."));
 
         Ok(Self(pool))
     }
@@ -32,17 +44,12 @@ impl Pool {
     /// Retrieves a connection from the pool
     ///
     /// # Errors
-    /// Will return an HTTP `SERVICE_UNAVAILABLE` error if a connection could not be retrieved
-    pub async fn get(&self) -> Result<Connection, ()> {
-        match self.0.get().await {
-            Ok(connection) => {
-                trace!("Got connectin from database pool.");
-                Ok(connection)
-            }
-
-            Err(_) => {
-                todo!();
-            }
-        }
+    /// Will return an error if there is a timeout or a connection error trying to retrieve a connection from the pool
+    pub async fn get(&self) -> exn::Result<Connection, Error> {
+        self.0
+            .get()
+            .await
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to get a connection from the pool".into()))
     }
 }

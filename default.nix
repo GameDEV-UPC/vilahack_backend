@@ -5,8 +5,8 @@
 }:
 
 rustPlatform.buildRustPackage {
-  pname = "vilahack_backend";
-  version = "0.1.1";
+  pname = "backend";
+  version = "0.1.3";
 
   src = ./.;
 
