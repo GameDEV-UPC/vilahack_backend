@@ -1,3 +1,5 @@
+pub mod preinscription;
+
 use axum_extra::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 

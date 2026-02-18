@@ -1,7 +1,9 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
-use deadpool_diesel::postgres::PoolError;
-use exn::Exn;
+use deadpool_diesel::{InteractError, postgres::PoolError};
+use diesel::{result::DatabaseErrorKind, result::Error as DieselErr};
 use jsonwebtoken::errors::ErrorKind as JwtErr;
+
+use exn::Exn;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -40,6 +42,12 @@ pub enum DatabaseError {
     Timeout,
     Connection,
     Pool,
+    NotFound,
+    Transaction,
+    Serialization,
+    Query,
+    ConstraintViolation,
+    Unknown,
 }
 
 impl Error {
@@ -141,6 +149,72 @@ impl From<PoolError> for Error {
             _ => Self {
                 error_type: Source::Database(DatabaseError::Pool),
                 message: "Database pool closed or falied to open".into(),
+            },
+        }
+    }
+}
+
+impl From<InteractError> for Error {
+    fn from(_value: InteractError) -> Self {
+        Self {
+            error_type: Source::Database(DatabaseError::Pool),
+            message: "Interaction with database pool failed".into(),
+        }
+    }
+}
+
+impl From<DieselErr> for Error {
+    fn from(value: diesel::result::Error) -> Self {
+        match value {
+            DieselErr::NotFound => Self {
+                error_type: Source::Database(DatabaseError::NotFound),
+                message: "What was requested wasn't found on the database".into(),
+            },
+
+            DieselErr::RollbackErrorOnCommit {..}
+            | DieselErr::RollbackTransaction
+            | DieselErr::AlreadyInTransaction
+            | DieselErr::NotInTransaction
+            | DieselErr::BrokenTransactionManager
+            | DieselErr::DatabaseError(
+                DatabaseErrorKind::UnableToSendCommand
+                | DatabaseErrorKind::ReadOnlyTransaction, _) => Self {
+                error_type: Source::Database(DatabaseError::Transaction),
+                message: "Something went wrong while dealing with a transaction".into(),
+            },
+
+            DieselErr::InvalidCString(_)
+            | DieselErr::SerializationError(_)
+            | DieselErr::DeserializationError(_)
+            | DieselErr::DatabaseError(DatabaseErrorKind::SerializationFailure, _) => Self {
+                error_type: Source::Database(DatabaseError::Serialization),
+                message: "Something went wrong trying to convert to or from a format the database can understand".into(),
+            },
+
+            DieselErr::QueryBuilderError(_) => Self {
+                error_type: Source::Database(DatabaseError::Query),
+                message: "A query was submitted that's not possible to execute".into()
+            },
+
+            DieselErr::DatabaseError(
+                DatabaseErrorKind::UniqueViolation
+                | DatabaseErrorKind::ForeignKeyViolation
+                | DatabaseErrorKind::RestrictViolation
+                | DatabaseErrorKind::NotNullViolation
+                | DatabaseErrorKind::CheckViolation
+                | DatabaseErrorKind::ExclusionViolation, info) => Self {
+                error_type: Source::Database(DatabaseError::ConstraintViolation),
+                message: info.message().into(),
+            },
+
+            DieselErr::DatabaseError(DatabaseErrorKind::ClosedConnection, _) => Self {
+                error_type: Source::Database(DatabaseError::Connection),
+                message: "Database closed the connection".into(),
+            },
+
+            _ => Self {
+                error_type: Source::Database(DatabaseError::Unknown),
+                message: "Something unexpected happened while attempting to communicate with the database".into(),
             },
         }
     }
