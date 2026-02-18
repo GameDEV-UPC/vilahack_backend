@@ -1,4 +1,6 @@
+use axum::{Json, http::StatusCode, response::IntoResponse};
 use deadpool_diesel::postgres::PoolError;
+use exn::Exn;
 use jsonwebtoken::errors::ErrorKind as JwtErr;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -9,15 +11,15 @@ pub struct Error {
     message: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Source {
     Authentication(AuthenticationError),
     Database(DatabaseError),
-    Upstream,
+    Internal,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthenticationError {
     InvalidFormat,
@@ -27,12 +29,12 @@ pub enum AuthenticationError {
     InvalidKey,
     InvalidClaim,
     NoMatchingKey,
-    InvalidValidityDate,
+    InvalidTimeRange,
     InsufficientPermissions,
     Unknown,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatabaseError {
     Timeout,
@@ -52,7 +54,7 @@ impl Error {
     #[must_use]
     pub const fn upstream(message: String) -> Self {
         Self {
-            error_type: Source::Upstream,
+            error_type: Source::Internal,
             message,
         }
     }
@@ -101,7 +103,7 @@ impl From<jsonwebtoken::errors::Error> for Error {
             },
 
             JwtErr::ExpiredSignature | JwtErr::ImmatureSignature => Self {
-                error_type: Source::Authentication(AuthenticationError::InvalidValidityDate),
+                error_type: Source::Authentication(AuthenticationError::InvalidTimeRange),
                 message: "JWT is expired or immature. Re-authentication is required".into(),
             },
 
@@ -141,5 +143,45 @@ impl From<PoolError> for Error {
                 message: "Database pool closed or falied to open".into(),
             },
         }
+    }
+}
+
+pub struct ErrorResponse(Exn<Error>);
+
+impl std::convert::From<exn::Exn<Error>> for ErrorResponse {
+    fn from(value: Exn<Error>) -> Self {
+        Self(value)
+    }
+}
+
+impl IntoResponse for ErrorResponse {
+    fn into_response(self) -> axum::response::Response {
+        // The root cause is the one that's propagated to the caller
+        let frame = match self.0.frame().children().last() {
+            Some(frame) => frame,
+            None => self.0.frame(),
+        };
+
+        #[allow(clippy::option_if_let_else)]
+        let error: &Error = match frame.error().downcast_ref() {
+            Some(error) => error,
+            None => &Error::upstream("Failed to downcast error. This should never happen".into()),
+        };
+
+        let http_code = match error.error_type {
+            // Authentication errors
+            Source::Authentication(AuthenticationError::Unknown) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            Source::Authentication(_) => StatusCode::UNAUTHORIZED,
+
+            // Database errors
+            Source::Database(DatabaseError::Timeout) => StatusCode::GATEWAY_TIMEOUT,
+
+            // Anything else
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (http_code, Json(error)).into_response()
     }
 }

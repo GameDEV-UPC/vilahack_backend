@@ -1,16 +1,13 @@
-use axum::http::StatusCode;
 use axum_extra::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 
-use crate::authentication::authenticate;
+use crate::{authentication::authenticate, error::ErrorResponse};
 
 pub async fn test(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-) -> Result<String, StatusCode> {
-    match authenticate(bearer.token()) {
-        Err(err) => eprintln!("err: {err:?}"),
-        Ok(val) => println!("val: {val}"),
-    }
+) -> Result<String, ErrorResponse> {
+    tracing::trace!("test endpoint called");
+    authenticate(bearer.token())?;
 
     Ok(String::from("tested"))
 }

@@ -27,8 +27,9 @@ url = { version = "2.5", features = ["serde"] }
 serde-email = "3.2"
 bitflags = { version = "2.10", features = ["serde"] }
 
-# Tracing
-fastrace = "0.7"
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Env access
 dotenvy = "0.15"

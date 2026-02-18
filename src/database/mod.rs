@@ -1,8 +1,6 @@
 use deadpool_diesel::{Manager, Pool as ConnectionPool, Runtime, postgres::Connection};
 use diesel::PgConnection;
 
-use fastrace::prelude::*;
-
 use crate::error::Error;
 use exn::ResultExt;
 
@@ -23,6 +21,8 @@ impl Pool {
     /// # Panics
     /// Never, the unwrap is for an infallible operation
     pub async fn from_url(url: &str) -> exn::Result<Self, Error> {
+        tracing::info!("Building connection pool...");
+
         let manager = Manager::new(url, Runtime::Tokio1);
 
         // Infallible!
@@ -35,8 +35,6 @@ impl Pool {
         let _ = pool.get().await.map_err(Error::from).or_raise(|| {
             Error::upstream("Failed to get a test connection while building the pool".into())
         })?;
-
-        LocalSpan::add_event(Event::new("Built databate pool."));
 
         Ok(Self(pool))
     }

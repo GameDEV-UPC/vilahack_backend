@@ -23,11 +23,11 @@ pub struct Claims {
     // user_metadata
 }
 
-/// TODO
+/// Validates a JWT
 ///
 /// # Errors
-/// TODO
-pub fn authenticate(token: &str) -> exn::Result<uuid::Uuid, Error> {
+/// Returns an error if the token could not be parsed or validated
+pub fn authenticate(token: &str) -> exn::Result<Claims, Error> {
     let jwkset: &JwkSet = &JWKSET;
     let header = decode_header(token)
         .map_err(Error::from)
@@ -61,6 +61,5 @@ pub fn authenticate(token: &str) -> exn::Result<uuid::Uuid, Error> {
     Ok(decode::<Claims>(token, key, &validation)
         .map_err(Error::from)
         .or_raise(|| Error::upstream("Authentication failed".into()))?
-        .claims
-        .sub)
+        .claims)
 }
