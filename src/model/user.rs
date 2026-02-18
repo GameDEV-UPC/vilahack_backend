@@ -1,5 +1,3 @@
-#![allow(clippy::struct_field_names)]
-
 use std::io::Write;
 
 use chrono::{DateTime, Utc};

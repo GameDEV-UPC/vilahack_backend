@@ -69,3 +69,9 @@ diesel::table! {
         status -> Status,
     }
 }
+
+diesel::table! {
+    preinscriptions (email) {
+        email -> Text,
+    }
+}

@@ -1,6 +1,9 @@
 use std::{env, sync::Arc};
 
-use axum::{Router, routing::get};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -22,6 +25,7 @@ async fn main() {
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/test", get(api::test))
+        .route("/v0/preinscribe", post(api::preinscription::preinscribe))
         .with_state(state);
 
     tracing::info!("Starting server at {bind}...");

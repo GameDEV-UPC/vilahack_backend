@@ -6,7 +6,7 @@
 
 rustPlatform.buildRustPackage {
   pname = "backend";
-  version = "0.1.3";
+  version = "0.1.4";
 
   src = ./.;
 
