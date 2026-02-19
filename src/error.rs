@@ -250,7 +250,11 @@ impl IntoResponse for ErrorResponse {
             Source::Authentication(_) => StatusCode::UNAUTHORIZED,
 
             // Database errors
-            Source::Database(DatabaseError::Timeout) => StatusCode::GATEWAY_TIMEOUT,
+            Source::Database(DatabaseError::Timeout | DatabaseError::Connection) => {
+                StatusCode::GATEWAY_TIMEOUT
+            }
+            Source::Database(DatabaseError::NotFound) => StatusCode::NOT_FOUND,
+            Source::Database(DatabaseError::ConstraintViolation) => StatusCode::PRECONDITION_FAILED,
 
             // Anything else
             _ => StatusCode::INTERNAL_SERVER_ERROR,
