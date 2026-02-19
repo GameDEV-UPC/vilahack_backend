@@ -6,11 +6,11 @@
 
 rustPlatform.buildRustPackage {
   pname = "backend";
-  version = "0.3.0";
+  version = "0.3.1";
 
   src = ./.;
 
   nativeBuildInputs = [ pkgconf ];
-  buildInputs = [ postgresql, openssl ];
+  buildInputs = [ postgresql openssl ];
   cargoLock.lockFile = ./Cargo.lock;
-}
+ 

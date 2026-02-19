@@ -11,6 +11,7 @@ it will load the variables from it.
 These are the variables it looks for:
 ```bash
 BIND_ADDRESS=<ip_address>:<port>
+ALLOW_ORIGIN=<cors_header_value>
 DATABASE_URL=<database_session_pooling_url> # Following the PostgreSQL connection string format.
 JWKS=<json_web_key_set>
 RUST_LOG=<level> # Following the env_logger format. (Optional, defaults to `error` if not defined)
