@@ -58,7 +58,7 @@ pub enum Experience {
     serde::Deserialize,
 )]
 #[ExistingTypePath = "crate::database::schema::sql_types::TshirtSize"]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 pub enum TshirSize {
     XS,
     S,
