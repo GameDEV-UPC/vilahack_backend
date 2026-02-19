@@ -184,11 +184,15 @@ impl From<DieselErr> for Error {
             },
 
             DieselErr::InvalidCString(_)
-            | DieselErr::SerializationError(_)
-            | DieselErr::DeserializationError(_)
             | DieselErr::DatabaseError(DatabaseErrorKind::SerializationFailure, _) => Self {
                 error_type: Source::Database(DatabaseError::Serialization),
                 message: "Something went wrong trying to convert to or from a format the database can understand".into(),
+            },
+
+            DieselErr::SerializationError(err)
+            | DieselErr::DeserializationError(err) => Self {
+                error_type: Source::Database(DatabaseError::Serialization),
+                message: format!("Something went wrong trying to convert to or from a format the database can understand: {err:?}"),
             },
 
             DieselErr::QueryBuilderError(_) => Self {
@@ -212,9 +216,9 @@ impl From<DieselErr> for Error {
                 message: "Database closed the connection".into(),
             },
 
-            _ => Self {
+            e => Self {
                 error_type: Source::Database(DatabaseError::Unknown),
-                message: "Something unexpected happened while attempting to communicate with the database".into(),
+                message: format!("Something unexpected happened while attempting to communicate with the database: {e:?}"),
             },
         }
     }

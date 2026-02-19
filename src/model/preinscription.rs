@@ -18,7 +18,7 @@ use crate::{database::schema, error::Error};
     serde::Deserialize,
 )]
 #[diesel(primary_key(email))]
-#[diesel(table_name = schema::preinscriptions)]
+#[diesel(table_name = schema::preinscription)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Preinscription {
     email: String,
@@ -37,13 +37,11 @@ impl Preinscription {
     /// # Errors
     /// May return any of the Database errors
     pub async fn preinscribe(self, connection: Connection) -> exn::Result<usize, Error> {
-        use schema::preinscriptions::dsl::preinscriptions;
+        use schema::preinscription::dsl::preinscription;
 
         connection
             .interact(move |connection| {
-                insert_into(preinscriptions)
-                    .values(self)
-                    .execute(connection)
+                insert_into(preinscription).values(self).execute(connection)
             })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno

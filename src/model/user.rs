@@ -1,16 +1,22 @@
 use std::io::Write;
 
 use chrono::{DateTime, Utc};
+use deadpool_diesel::postgres::Connection;
 use uuid::Uuid;
 
 use diesel::{
+    insert_into,
     pg::Pg,
     prelude::*,
     serialize::{self, IsNull, Output, ToSql},
 };
 
-use crate::database::schema;
-use crate::database::schema::sql_types::AccessibilityType;
+use exn::ResultExt;
+
+use crate::{
+    database::schema::{self, sql_types::AccessibilityType},
+    error::Error,
+};
 
 #[derive(
     diesel_derive_enum::DbEnum,
@@ -179,6 +185,7 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
     Queryable,
     Identifiable,
     Selectable,
+    Insertable,
     Debug,
     Clone,
     PartialEq,
@@ -216,7 +223,28 @@ pub struct User {
     #[serde(skip_deserializing)]
     pub check_in: Option<DateTime<Utc>>,
     #[serde(skip_deserializing)]
-    pub qr_code: String,
+    pub qr_code: Option<String>,
     #[serde(skip_deserializing)]
     pub status: Status,
+}
+
+impl User {
+    /// Insert the user into the public.user table
+    ///
+    /// # Errors
+    /// May return an error if there's an issue communicating with the database
+    pub async fn create(mut self, id: Uuid, connection: Connection) -> exn::Result<usize, Error> {
+        use schema::user::dsl::user;
+
+        self.id = id;
+        self.created_at = Utc::now();
+
+        connection
+            .interact(move |connection| insert_into(user).values(self).execute(connection))
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+    }
 }

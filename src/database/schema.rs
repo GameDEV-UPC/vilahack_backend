@@ -32,7 +32,7 @@ pub mod sql_types {
     pub struct Status;
 
     #[derive(diesel::SqlType)]
-    #[diesel(postgres_type(name = "Int2"))]
+    #[diesel(postgres_type(name = "int2"))]
     pub struct AccessibilityType;
 }
 
@@ -65,13 +65,13 @@ diesel::table! {
         check_in -> Nullable<Timestamptz>,
         comment -> Text,
         is_at_end -> Bool,
-        qr_code -> Text,
+        qr_code -> Nullable<Text>,
         status -> Status,
     }
 }
 
 diesel::table! {
-    preinscriptions (email) {
+    preinscription (email) {
         email -> Text,
     }
 }
