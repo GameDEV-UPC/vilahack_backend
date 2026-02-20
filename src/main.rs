@@ -1,7 +1,7 @@
 use std::{env, sync::Arc};
 
 use axum::{Router, http::HeaderValue, routing::put};
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -24,7 +24,9 @@ async fn main() {
         .parse::<HeaderValue>()
         .expect("Failed to parse `ALLOW_ORIGIN`");
 
-    let cors_layer = CorsLayer::new().allow_origin(allow_origin);
+    let cors_layer = CorsLayer::new()
+        .allow_origin(allow_origin)
+        .allow_methods(Any);
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
