@@ -1,7 +1,11 @@
 use std::{env, sync::Arc};
 
-use axum::{Router, routing::put};
-use tower_http::cors::CorsLayer;
+use axum::{
+    Router,
+    http::{HeaderValue, Method},
+    routing::put,
+};
+use tower_http::cors::{Any, CorsLayer};
 
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
@@ -19,12 +23,16 @@ async fn main() {
 
     let bind = env::var("BIND_ADDRESS").expect("Missing server's `BIND_ADDRESS` env variable");
     let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");
-    // let allow_origin = env::var("ALLOW_ORIGIN")
-    //     .expect("Missing `ALLOW_ORIGIN`")
-    //     .parse::<HeaderValue>()
-    //     .expect("Failed to parse `ALLOW_ORIGIN`");
 
-    let cors_layer = CorsLayer::permissive();
+    let allow_origin = env::var("ALLOW_ORIGIN")
+        .expect("Missing `ALLOW_ORIGIN`")
+        .parse::<HeaderValue>()
+        .expect("Failed to parse `ALLOW_ORIGIN`");
+    let cors_layer = CorsLayer::new()
+        .allow_origin(allow_origin)
+        .allow_methods([Method::PUT])
+        .allow_headers(Any);
+
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
