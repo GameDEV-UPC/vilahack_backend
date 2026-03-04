@@ -9,6 +9,7 @@ use diesel::{
     pg::Pg,
     prelude::*,
     serialize::{self, IsNull, Output, ToSql},
+    update,
 };
 
 use exn::ResultExt;
@@ -223,8 +224,6 @@ pub struct User {
     #[serde(skip_deserializing)]
     pub check_in: Option<DateTime<Utc>>,
     #[serde(skip_deserializing)]
-    pub qr_code: Option<String>,
-    #[serde(skip_deserializing)]
     pub status: Status,
 }
 
@@ -246,5 +245,27 @@ impl User {
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to insert the user".into()))
+    }
+
+    /// Check in the user now
+    ///
+    /// # Errors
+    /// Will return an error if an inexistent user id is passed or if it's attempted on a user
+    /// that's already been checked in. May return an error if there's an issue communicating
+    /// with the database.
+    pub async fn check_in(uid: Uuid, connection: Connection) -> exn::Result<usize, Error> {
+        use schema::user::dsl::{check_in, id, user};
+
+        connection
+            .interact(move |connection| {
+                update(user.filter(id.eq(uid)).filter(check_in.is_null()))
+                    .set(check_in.eq(Some(Utc::now())))
+                    .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to update the check_in timestamp".into()))
     }
 }

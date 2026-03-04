@@ -37,6 +37,7 @@ async fn main() {
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
         .route("/v0/user/sign_up", put(api::user::sign_up))
+        .route("/v0/user/check_in", put(api::user::check_in))
         .layer(cors_layer)
         .with_state(state);
 

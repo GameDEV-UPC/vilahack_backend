@@ -65,7 +65,6 @@ diesel::table! {
         check_in -> Nullable<Timestamptz>,
         comment -> Text,
         is_at_end -> Bool,
-        qr_code -> Nullable<Text>,
         status -> Status,
     }
 }

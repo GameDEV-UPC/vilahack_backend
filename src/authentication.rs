@@ -12,7 +12,10 @@ static JWKSET: LazyLock<JwkSet> = LazyLock::new(|| {
 });
 
 const AUTHENTICATED_AUDIENCE: [&str; 1] = ["authenticated"];
-const ISSUER: [&str; 1] = ["https://tfhmghtvgexflhdwcrer.supabase.co/auth/v1"];
+const ISSUER: [&str; 2] = [
+    "https://tfhmghtvgexflhdwcrer.supabase.co/auth/v1",
+    "https://cubbdrwjtheisxvqjbgx.supabase.co/auth/v1",
+];
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Claims {

@@ -52,9 +52,17 @@ pub enum DatabaseError {
 
 impl Error {
     #[must_use]
-    pub const fn authentication(error_type: AuthenticationError, message: String) -> Self {
+    pub const fn authentication(reason: AuthenticationError, message: String) -> Self {
         Self {
-            error_type: Source::Authentication(error_type),
+            error_type: Source::Authentication(reason),
+            message,
+        }
+    }
+
+    #[must_use]
+    pub const fn database(reason: DatabaseError, message: String) -> Self {
+        Self {
+            error_type: Source::Database(reason),
             message,
         }
     }
