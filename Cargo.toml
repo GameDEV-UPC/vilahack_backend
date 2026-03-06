@@ -1,11 +1,12 @@
 [package]
 name = "backend"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2024"
 
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 
 # Database connection
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
@@ -14,7 +15,7 @@ diesel-derive-enum = { version = "2.1", features = ["postgres"] }
 
 # HTTP server / API
 axum = "0.8"
-axum-extra = { version = "0.12", features = ["typed-header"] }
+axum-extra = { version = "0.12", features = ["typed-header", "file-stream"] }
 tower-http = { version = "0.6", features = ["cors"] }
 headers = "0.4"
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
@@ -22,11 +23,12 @@ jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 # Parsing and types
 serde = { version = "1", features = ["serde_derive"] }
 serde_json = "1.0"
-uuid = { version = "1.20", features = ["serde", "rng", "v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-url = { version = "2.5", features = ["serde"] }
-serde-email = "3.2"
+base64 = "0.22.1"
 bitflags = { version = "2.10", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde-email = "3.2"
+url = { version = "2.5", features = ["serde"] }
+uuid = { version = "1.20", features = ["serde", "rng", "v4"] }
 
 # Observability
 tracing = "0.1"
@@ -37,6 +39,8 @@ dotenvy = "0.15"
 
 # Other
 exn = "0.3"
+fast_qr = { version = "0.13", features = ["image"] }
+bytes = "1.11.1"
 
 [profile.release]
 lto = 'fat' # Perform link time optimizations for the whole dependency graph

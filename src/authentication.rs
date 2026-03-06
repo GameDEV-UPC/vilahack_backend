@@ -11,11 +11,12 @@ static JWKSET: LazyLock<JwkSet> = LazyLock::new(|| {
         .expect("Failed to deserialze JWK set from JWKS env variable")
 });
 
+static ISSUER: LazyLock<String> = LazyLock::new(|| {
+    dotenvy::dotenv().ok();
+    env::var("ISSUER").expect("Missing ISSUER env variable")
+});
+
 const AUTHENTICATED_AUDIENCE: [&str; 1] = ["authenticated"];
-const ISSUER: [&str; 2] = [
-    "https://tfhmghtvgexflhdwcrer.supabase.co/auth/v1",
-    "https://cubbdrwjtheisxvqjbgx.supabase.co/auth/v1",
-];
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Claims {
@@ -53,7 +54,7 @@ pub fn authenticate(token: &str) -> exn::Result<Claims, Error> {
     let validation = {
         let mut validation = Validation::new(header.alg);
         validation.set_audience(&AUTHENTICATED_AUDIENCE);
-        validation.set_issuer(&ISSUER);
+        validation.set_issuer(&[&*ISSUER]);
         validation
     };
 

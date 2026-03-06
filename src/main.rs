@@ -3,7 +3,7 @@ use std::{env, sync::Arc};
 use axum::{
     Router,
     http::{HeaderValue, Method},
-    routing::put,
+    routing::{get, put},
 };
 use tower_http::cors::{Any, CorsLayer};
 
@@ -30,14 +30,15 @@ async fn main() {
         .expect("Failed to parse `ALLOW_ORIGIN`");
     let cors_layer = CorsLayer::new()
         .allow_origin(allow_origin)
-        .allow_methods([Method::PUT])
+        .allow_methods([Method::GET, Method::PUT])
         .allow_headers(Any);
 
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
         .route("/v0/user/sign_up", put(api::user::sign_up))
-        .route("/v0/user/check_in", put(api::user::check_in))
+        // .route("/v0/user/check_in", put(api::user::check_in))
+        .route("/v0/user/qr.svg", get(api::user::qr))
         .layer(cors_layer)
         .with_state(state);
 
