@@ -4,22 +4,21 @@ use axum::{
     Json, body,
     extract::{Query, State},
     http::{HeaderValue, StatusCode, header},
-    response::{IntoResponse, Response},
+    response::Response,
 };
-use axum_extra::{TypedHeader, response::file_stream::FileStream};
-use chrono::Utc;
+use axum_extra::TypedHeader;
 use headers::{Authorization, authorization::Bearer};
 
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 use fast_qr::{
-    convert::{Builder, Shape, image::ImageBuilder, svg::SvgBuilder},
+    convert::{Builder, Shape, svg::SvgBuilder},
     qr::QRBuilder,
 };
 
 use crate::{
     authentication::{Claims, authenticate},
     database::Pool,
-    error::{Error, ErrorResponse},
+    error::ErrorResponse,
     model::user::User,
 };
 
@@ -88,6 +87,14 @@ pub struct Colors {
     background: Option<String>,
 }
 
+/// Returns an SVG of the QR code that identifies
+///
+/// # Errors
+/// Will return an error if the queries are malformed or if authentication fails
+///
+/// # Panics
+/// Never, should be infallible
+#[allow(clippy::unused_async)]
 pub async fn qr(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(style): Query<Colors>,
@@ -96,22 +103,24 @@ pub async fn qr(
 
     let Claims { sub, .. } = authenticate(bearer.token())?;
 
+    let Ok(qr) = QRBuilder::new(BASE64_STANDARD_NO_PAD.encode(sub.as_bytes())).build() else {
+        todo!()
+    };
+
     let qr = SvgBuilder::default()
         .shape(Shape::Square)
-        .module_color(style.module.unwrap_or("#000000ff".into()))
-        .background_color(style.background.unwrap_or("#ffffffff".into()))
-        .to_str(
-            &QRBuilder::new(BASE64_STANDARD_NO_PAD.encode(sub.as_bytes()))
-                .build()
-                .unwrap(),
-        );
+        .module_color(style.module.unwrap_or_else(|| "#000000ff".into()))
+        .background_color(style.background.unwrap_or_else(|| "#ffffffff".into()))
+        .to_str(&qr);
 
+    // These expects _should_ be infallible
     Ok(Response::builder()
         .status(200)
         .header(
             header::CONTENT_TYPE,
-            HeaderValue::from_str("image/svg+xml").unwrap(),
+            HeaderValue::from_str("image/svg+xml")
+                .expect("ASCII is broken! Call the fire department!"),
         )
         .body(body::Body::from(qr))
-        .unwrap())
+        .expect("HTTP headers are broken! The web is in shambles."))
 }

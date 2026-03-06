@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7", features = ["io"] }
 
 # Database connection
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
@@ -40,7 +39,6 @@ dotenvy = "0.15"
 # Other
 exn = "0.3"
 fast_qr = { version = "0.13", features = ["image"] }
-bytes = "1.11.1"
 
 [profile.release]
 lto = 'fat' # Perform link time optimizations for the whole dependency graph
