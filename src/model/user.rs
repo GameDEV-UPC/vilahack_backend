@@ -251,16 +251,20 @@ impl User {
     ///
     /// # Errors
     /// Will return an error if an inexistent user id is passed or if it's attempted on a user
-    /// that's already been checked in. May return an error if there's an issue communicating
-    /// with the database.
+    /// that's already been checked in or not accepted. May return an error if there's an issue
+    /// communicating with the database.
     pub async fn check_in(uid: Uuid, connection: Connection) -> exn::Result<(), Error> {
-        use schema::user::dsl::{check_in, id, user};
+        use schema::user::dsl::{check_in, id, status, user};
 
         match connection
             .interact(move |connection| {
-                update(user.filter(id.eq(uid)).filter(check_in.is_null()))
-                    .set(check_in.eq(Some(Utc::now())))
-                    .execute(connection)
+                update(
+                    user.filter(id.eq(uid))
+                        .filter(check_in.is_null())
+                        .filter(status.eq(Status::Accepted)),
+                )
+                .set(check_in.eq(Some(Utc::now())))
+                .execute(connection)
             })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
