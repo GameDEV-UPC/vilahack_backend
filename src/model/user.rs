@@ -197,7 +197,7 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
 #[diesel(table_name = schema::user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
-    #[serde(skip_deserializing)]
+    #[serde(skip_deserializing, skip_serializing)]
     pub id: Uuid,
     pub name: String,
     pub phone: String,
@@ -253,10 +253,10 @@ impl User {
     /// Will return an error if an inexistent user id is passed or if it's attempted on a user
     /// that's already been checked in. May return an error if there's an issue communicating
     /// with the database.
-    pub async fn check_in(uid: Uuid, connection: Connection) -> exn::Result<usize, Error> {
+    pub async fn check_in(uid: Uuid, connection: Connection) -> exn::Result<(), Error> {
         use schema::user::dsl::{check_in, id, user};
 
-        connection
+        match connection
             .interact(move |connection| {
                 update(user.filter(id.eq(uid)).filter(check_in.is_null()))
                     .set(check_in.eq(Some(Utc::now())))
@@ -266,6 +266,41 @@ impl User {
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to update the check_in timestamp".into()))
+            .or_raise(|| Error::upstream("Failed to update the check_in timestamp".into()))?
+        {
+            0 => Err(exn::Exn::new(Error::database(
+                crate::error::DatabaseError::ConstraintViolation,
+                "The user doesn't exist or it has already been checked in".into(),
+            ))),
+            1 => Ok(()),
+            n => {
+                tracing::warn!("{n} rows were updated when trying to check in a user.");
+
+                Err(exn::Exn::new(Error::database(
+                    crate::error::DatabaseError::Unknown,
+                    format!(
+                        "Something went horribly wrong when trying to check_in user {uid} at {}. Please contact an administrator as soon as possible",
+                        Utc::now()
+                    ),
+                )))
+            }
+        }
+    }
+
+    /// Get all the user's info
+    ///
+    /// # Errors
+    /// Will return an error if an inexistent user id is passed or if the user has not made an
+    /// application. May return an error if there's an issue communicating with the database.
+    pub async fn get(uid: Uuid, connection: Connection) -> exn::Result<Self, Error> {
+        use schema::user::dsl::user;
+
+        connection
+            .interact(move |connection| user.find(uid).select(Self::as_select()).first(connection))
+            .await
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to get the user from the database".into()))
     }
 }

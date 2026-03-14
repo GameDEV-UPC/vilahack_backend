@@ -16,11 +16,36 @@ use fast_qr::{
 };
 
 use crate::{
-    authentication::{Claims, authenticate},
+    authentication::{ADMIN_ROLE, Claims, authenticate},
     database::Pool,
-    error::ErrorResponse,
+    error::{AuthenticationError, Error, ErrorResponse},
     model::user::User,
 };
+
+#[derive(serde::Deserialize)]
+pub struct UidQuery {
+    id: Option<uuid::Uuid>,
+    qr: Option<String>,
+}
+
+impl UidQuery {
+    fn get(&self) -> Option<uuid::Uuid> {
+        if self.id.is_some() {
+            self.id
+        } else if let Some(encoded) = &self.qr {
+            let mut decoded: [u8; 16] = [0; 16];
+            if BASE64_STANDARD_NO_PAD
+                .decode_slice(encoded, &mut decoded)
+                .is_err()
+            {
+                return None;
+            }
+            Some(uuid::Uuid::from_bytes(decoded))
+        } else {
+            None
+        }
+    }
+}
 
 /// Create the row in the public.User table
 ///
@@ -32,7 +57,7 @@ pub async fn sign_up(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Json(user): Json<User>,
 ) -> Result<StatusCode, ErrorResponse> {
-    tracing::trace!("/v0/user/sign_up endpoint called");
+    tracing::trace!("Endpoint /v0/user/sign_up called");
 
     let Claims { sub, .. } = authenticate(bearer.token())?;
     _ = user.create(sub, pool.get().await?).await?;
@@ -40,44 +65,37 @@ pub async fn sign_up(
     Ok(StatusCode::OK)
 }
 
-// Wow! I don't know what I was thinking.
-// /// Set the check in timestamp for the user
-// ///
-// /// # Errors
-// /// Will return an error if the user had already been checked in, if it doesn't exists, if there's
-// /// an issue communicating with the database, or if authentication fails.
-// pub async fn check_in(
-//     State(pool): State<Arc<Pool>>,
-//     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-// ) -> Result<StatusCode, ErrorResponse> {
-//     tracing::trace!("/v0/user/check_in endpoint called");
-//
-//     let Claims { sub, .. } = authenticate(bearer.token())?;
-//
-//     match User::check_in(sub, pool.get().await?).await? {
-//         0 => Err(ErrorResponse::from(exn::Exn::new(Error::database(
-//             crate::error::DatabaseError::ConstraintViolation,
-//             "The user doesn't exist or it has already been checked in".into(),
-//         )))),
-//         1 => Ok(StatusCode::OK),
-//         n => {
-//             tracing::warn!("{n} rows were updated when trying to check in a user.");
-//
-//             Err(ErrorResponse::from(exn::Exn::new(Error::database(
-//                 crate::error::DatabaseError::Unknown,
-//                 format!(
-//                     "Something went horribly wrong when trying to check_in user {sub} at {}. Please contact an administrator as soon as possible",
-//                     Utc::now()
-//                 ),
-//             ))))
-//         }
-//     }
-// }
-//
-// let mut decoded: [u8; 16] = [0; 16];
-// BASE64_STANDARD_NO_PAD.decode_slice(encoded_sub, &mut decoded).unwrap();
-// let uuid = uuid::Uuid::from_bytes(decoded);
-// println!("Decoded: {}", uuid);
+/// Set the check in timestamp for the user
+///
+/// # Errors
+/// Will return an error if the user had already been checked in, if it doesn't exist, if the user
+/// id to be ckecked in wasn't passed, if there's an issue communicating with the database,
+/// or if authentication fails.
+pub async fn check_in(
+    State(pool): State<Arc<Pool>>,
+    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    Query(uid): Query<UidQuery>,
+) -> Result<(), ErrorResponse> {
+    tracing::trace!("Endpoint /v0/user/check_in called");
+
+    let Claims { sub, role } = authenticate(bearer.token())?;
+    if role != ADMIN_ROLE {
+        return Err(ErrorResponse::from(exn::Exn::new(Error::authentication(
+            AuthenticationError::InsufficientPermissions,
+            "This user is not authorized to do this operation".into(),
+        ))));
+    }
+
+    // I'm going all the way to the database with a thing that I know will cause an error. This is
+    // bad on resources. But realistically will never happen, or at least not often. Since this API
+    // will be called by a frontend, the frontend will always include the user id.
+    // I'm doing it this way because it really simplifies things on the backend.
+    let uid = uid.get().unwrap_or_default();
+
+    User::check_in(uid, pool.get().await?).await?;
+    tracing::trace!("[CHECK IN] {sub} checked in {uid}");
+    Ok(())
+}
 
 #[derive(serde::Deserialize)]
 pub struct Colors {
@@ -94,12 +112,14 @@ pub struct Colors {
 ///
 /// # Panics
 /// Never, should be infallible
+/// (Technically, it can panic if the hardcoded string "`image/svg+xml`" stops being considered
+/// ASCII or if it stops being considered a valid value for the `CONTENT_TYPE` header.)
 #[allow(clippy::unused_async)]
 pub async fn qr(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(style): Query<Colors>,
 ) -> Result<Response, ErrorResponse> {
-    tracing::trace!("/v0/user/qr.svg");
+    tracing::trace!("Endpoint /v0/user/qr.svg called");
 
     let Claims { sub, .. } = authenticate(bearer.token())?;
 
@@ -123,4 +143,36 @@ pub async fn qr(
         )
         .body(body::Body::from(qr))
         .expect("HTTP headers are broken! The web is in shambles."))
+}
+
+/// Returns all of the user's data.
+///
+/// If the caller is an admin and they provided a uid on the query,
+/// the data of the user with that uid will be returned. Otherwise, the data of the caller's JWT
+/// subject will be returned.
+///
+/// # Errors
+/// Will return an error if the user being fetched doesn't exist or doesn't have an entry
+/// associated with it. It will also return an error if the queries are malformed, if
+/// authentication fails or if there's an issue communicating with the database.
+pub async fn get(
+    State(pool): State<Arc<Pool>>,
+    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    Query(uid): Query<UidQuery>,
+) -> Result<Json<User>, ErrorResponse> {
+    tracing::trace!("Endpoint /v0/user called");
+
+    let Claims { sub, role } = authenticate(bearer.token())?;
+
+    // If the caller is an admin and they've provided a uid, use that uid. Otherwise use the
+    // JWT's subject
+    let uid = match (role == ADMIN_ROLE, uid.get()) {
+        (true, Some(uid)) => {
+            tracing::trace!("[PRIVACY] {sub} is checking the info for {uid}");
+            uid
+        }
+        _ => sub,
+    };
+
+    Ok(Json(User::get(uid, pool.get().await?).await?))
 }

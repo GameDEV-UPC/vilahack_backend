@@ -17,6 +17,7 @@ static ISSUER: LazyLock<String> = LazyLock::new(|| {
 });
 
 const AUTHENTICATED_AUDIENCE: [&str; 1] = ["authenticated"];
+pub const ADMIN_ROLE: &str = "admin";
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Claims {

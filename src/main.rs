@@ -36,8 +36,9 @@ async fn main() {
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
+        .route("/v0/user", get(api::user::get))
         .route("/v0/user/sign_up", put(api::user::sign_up))
-        // .route("/v0/user/check_in", put(api::user::check_in))
+        .route("/v0/user/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
         .layer(cors_layer)
         .with_state(state);
