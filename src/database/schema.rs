@@ -69,6 +69,26 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(member_of -> user (user));
+
+diesel::table! {
+    member_of (user) {
+        user -> Uuid,
+        team -> Uuid,
+    }
+}
+
+diesel::joinable!(member_of -> team (team));
+
+diesel::table! {
+    team (id) {
+        id -> Uuid,
+        name -> Text,
+        member_count -> SmallInt,
+        score -> Integer,
+    }
+}
+
 diesel::table! {
     preinscription (email) {
         email -> Text,
