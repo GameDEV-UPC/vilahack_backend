@@ -104,10 +104,7 @@ impl Team {
                     .first(connection)?;
 
                 if count >= 4 {
-                    return Err(DieselError::DatabaseError(
-                        DbErrorKind::CheckViolation,
-                        Box::new("The group is already full.".to_owned()),
-                    ));
+                    return Err(DieselError::NotFound);
                 }
 
                 // Relies on the primary key constraint to ensure that the user isn't already on
@@ -158,7 +155,7 @@ impl Team {
             .or_raise(|| Error::upstream("Failed to insert the user".into()))?
         {
             0 => Err(exn::Exn::new(Error::database(
-                crate::error::DatabaseError::ConstraintViolation,
+                crate::error::DatabaseError::NotFound,
                 "The user is not in a team".into(),
             ))),
             1 => Ok(()),
