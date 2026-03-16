@@ -84,10 +84,11 @@ diesel::table! {
     team (id) {
         id -> Uuid,
         name -> Text,
-        member_count -> SmallInt,
         score -> Integer,
     }
 }
+
+diesel::allow_tables_to_appear_in_same_query!(user, member_of, team);
 
 diesel::table! {
     preinscription (email) {

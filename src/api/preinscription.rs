@@ -14,7 +14,7 @@ pub async fn preinscribe(
     State(pool): State<Arc<Pool>>,
     Json(email): Json<Email>,
 ) -> Result<StatusCode, ErrorResponse> {
-    tracing::trace!("Endpoint /v0/preinscribe called");
+    tracing::trace!("[API Call] PUT /v0/preinscribe");
 
     Preinscription::new(&email)
         .preinscribe(pool.get().await?)

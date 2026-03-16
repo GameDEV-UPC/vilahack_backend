@@ -1,6 +1,6 @@
 use deadpool_diesel::postgres::Connection as PgConnection;
 use diesel::{
-    Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
+    Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable,
     dsl::count,
     insert_into,
     prelude::{Identifiable, Insertable, Queryable},
@@ -30,15 +30,21 @@ pub struct MemberOf {
 pub struct Team {
     pub id: Uuid,
     pub name: String,
-    pub member_count: i16,
     pub score: i32,
+}
+
+#[derive(serde::Serialize)]
+pub struct TeamSummary {
+    name: String,
+    id: String,
+    members: Vec<String>,
 }
 
 impl Team {
     /// Create the team with the given name and join the creator to it.
     ///
     /// # Errors
-    /// Will return an error if the user or team don't exist, or if the user is already in a team.
+    /// Will return an error if the user is already in a team.
     /// May return an error if there's an issue communicating with the database.
     pub async fn new(
         name: String,
@@ -87,14 +93,10 @@ impl Team {
     /// Will return an error if the team or user don't exist, or if the user is already in a team.
     /// It will also return an error if the group already has 4 members.
     /// May return an error if there's an issue communicating with the database.
-    pub async fn join(
-        user: Uuid,
-        team: Uuid,
-        connection: PgConnection,
-    ) -> exn::Result<usize, Error> {
+    pub async fn join(user: Uuid, team: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
         use schema::member_of::dsl::{member_of, team as team_dsl, user as user_dsl};
 
-        connection
+        match connection
             .interact(move |connection| {
                 let count: i64 = member_of
                     .filter(team_dsl.eq(team))
@@ -119,7 +121,24 @@ impl Team {
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+        {
+            0 => Err(exn::Exn::new(Error::database(
+                crate::error::DatabaseError::ConstraintViolation,
+                "The user is already in a team".into(),
+            ))),
+            1 => Ok(()),
+            n => {
+                tracing::warn!(
+                    "{n} rows were updated when trying to join user {user} to team {team}"
+                );
+
+                Err(exn::Exn::new(Error::database(
+                    crate::error::DatabaseError::Unknown,
+                    "Something unexpected happened when trying to join the team".into(),
+                )))
+            }
+        }
     }
 
     /// Leave whatever team the user is joined to
@@ -127,16 +146,33 @@ impl Team {
     /// # Errors
     /// Will return an error if the user doesn't exists or if the user does not belong to the team.
     /// May return an error if there's an issue communicating with the database.
-    pub async fn leave(user: Uuid, connection: PgConnection) -> exn::Result<usize, Error> {
+    pub async fn leave(user: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
         use schema::member_of::dsl::member_of;
 
-        connection
+        match connection
             .interact(move |connection| diesel::delete(member_of.find(user)).execute(connection))
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+        {
+            0 => Err(exn::Exn::new(Error::database(
+                crate::error::DatabaseError::ConstraintViolation,
+                "The user is not in a team".into(),
+            ))),
+            1 => Ok(()),
+            n => {
+                tracing::warn!(
+                    "{n} rows were updated when trying to leave {user} from their group"
+                );
+
+                Err(exn::Exn::new(Error::database(
+                    crate::error::DatabaseError::Unknown,
+                    "Something unexpected happened while trying to leave".into(),
+                )))
+            }
+        }
     }
 
     /// Update the name of the team the user currently belongs to
@@ -148,17 +184,68 @@ impl Team {
         user: Uuid,
         name: String,
         connection: PgConnection,
-    ) -> exn::Result<usize, Error> {
+    ) -> exn::Result<(), Error> {
         use schema::member_of::dsl::{member_of, team as team_id};
         use schema::team::dsl::{id, name as name_dsl, team};
 
-        connection
+        match connection
             .interact(move |connection| {
                 let team_fk: Uuid = member_of.find(user).select(team_id).first(connection)?;
 
                 update(team.filter(id.eq(team_fk)))
                     .set(name_dsl.eq(name))
                     .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+        {
+            0 => Err(exn::Exn::new(Error::database(
+                crate::error::DatabaseError::Unknown,
+                "The team's name could not be updated".into(),
+            ))),
+            1 => Ok(()),
+            n => {
+                tracing::warn!("{n} rows were updated when trying to update a group name");
+
+                Err(exn::Exn::new(Error::database(
+                    crate::error::DatabaseError::Unknown,
+                    "Something unexpected happened when trying to update the team name".into(),
+                )))
+            }
+        }
+    }
+
+    /// Get a summary of the team
+    ///
+    /// # Errors
+    /// Will return an error if the user is not in any team
+    /// May return an error if there's an issue communicating with the database.
+    pub async fn summary(user: Uuid, connection: PgConnection) -> exn::Result<TeamSummary, Error> {
+        use schema::member_of::dsl::{member_of, team as team_id, user as team_member};
+        use schema::team::dsl::{name, team};
+        use schema::user::dsl::{id as user_id, name as user_name, user as user_dsl};
+
+        use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
+
+        connection
+            .interact(move |connection| {
+                let team_fk: Uuid = member_of.find(user).select(team_id).first(connection)?;
+                let team_name = team.find(team_fk).select(name).first(connection)?;
+
+                let member_names: Vec<String> = member_of
+                    .inner_join(user_dsl.on(team_member.eq(user_id)))
+                    .filter(team_id.eq(team_fk))
+                    .select(user_name)
+                    .load::<String>(connection)?;
+
+                Ok::<TeamSummary, DieselError>(TeamSummary {
+                    name: team_name,
+                    id: BASE64_STANDARD_NO_PAD.encode(team_fk.as_bytes()),
+                    members: member_names,
+                })
             })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno

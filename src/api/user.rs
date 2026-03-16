@@ -57,7 +57,7 @@ pub async fn sign_up(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Json(user): Json<User>,
 ) -> Result<StatusCode, ErrorResponse> {
-    tracing::trace!("Endpoint /v0/user/sign_up called");
+    tracing::trace!("[API Call] PUT /v0/user/sign_up");
 
     let Claims { sub, .. } = authenticate(bearer.token())?;
     _ = user.create(sub, pool.get().await?).await?;
@@ -76,7 +76,7 @@ pub async fn check_in(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(uid): Query<UidQuery>,
 ) -> Result<(), ErrorResponse> {
-    tracing::trace!("Endpoint /v0/user/check_in called");
+    tracing::trace!("[API Call] PUT /v0/user/check_in");
 
     let Claims { sub, role } = authenticate(bearer.token())?;
     if role != ADMIN_ROLE {
@@ -119,7 +119,7 @@ pub async fn qr(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(style): Query<Colors>,
 ) -> Result<Response, ErrorResponse> {
-    tracing::trace!("Endpoint /v0/user/qr.svg called");
+    tracing::trace!("[API Call] GET /v0/user/qr.svg");
 
     let Claims { sub, .. } = authenticate(bearer.token())?;
 
@@ -160,7 +160,7 @@ pub async fn get(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(uid): Query<UidQuery>,
 ) -> Result<Json<User>, ErrorResponse> {
-    tracing::trace!("Endpoint /v0/user called");
+    tracing::trace!("[API Call] GET /v0/user");
 
     let Claims { sub, role } = authenticate(bearer.token())?;
 
