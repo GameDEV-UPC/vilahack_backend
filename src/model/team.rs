@@ -1,8 +1,11 @@
 use deadpool_diesel::postgres::Connection as PgConnection;
 use diesel::{
-    Connection, ExpressionMethods, RunQueryDsl, Selectable, insert_into,
+    Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
+    dsl::count,
+    insert_into,
     prelude::{Identifiable, Insertable, Queryable},
-    result::Error as DieselError,
+    result::{DatabaseErrorKind as DbErrorKind, Error as DieselError},
+    update,
 };
 
 use uuid::Uuid;
@@ -11,7 +14,7 @@ use exn::ResultExt;
 
 use crate::{database::schema, error::Error};
 
-#[derive(Queryable, Insertable, Debug, Clone)]
+#[derive(Queryable, Insertable, Selectable, Debug, Clone)]
 #[diesel(primary_key(user))]
 #[diesel(table_name = schema::member_of)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -41,7 +44,7 @@ impl Team {
         name: String,
         creator: Uuid,
         connection: PgConnection,
-    ) -> exn::Result<Team, Error> {
+    ) -> exn::Result<Self, Error> {
         use schema::{
             member_of::dsl::member_of,
             team::dsl::{name as team_name, team},
@@ -50,7 +53,7 @@ impl Team {
         connection
             .interact(move |connection| {
                 connection.transaction(|connection| {
-                    let inserted_team: Team = insert_into(team)
+                    let inserted_team: Self = insert_into(team)
                         .values(team_name.eq(name))
                         .get_result(connection)?;
 
@@ -68,7 +71,7 @@ impl Team {
                         })
                         .execute(connection)?;
 
-                    Ok::<Team, DieselError>(inserted_team)
+                    Ok::<Self, DieselError>(inserted_team)
                 })
             })
             .await
@@ -82,16 +85,29 @@ impl Team {
     ///
     /// # Errors
     /// Will return an error if the team or user don't exist, or if the user is already in a team.
+    /// It will also return an error if the group already has 4 members.
     /// May return an error if there's an issue communicating with the database.
     pub async fn join(
         user: Uuid,
         team: Uuid,
         connection: PgConnection,
     ) -> exn::Result<usize, Error> {
-        use schema::member_of::dsl::member_of;
+        use schema::member_of::dsl::{member_of, team as team_dsl, user as user_dsl};
 
         connection
             .interact(move |connection| {
+                let count: i64 = member_of
+                    .filter(team_dsl.eq(team))
+                    .select(count(user_dsl))
+                    .first(connection)?;
+
+                if count >= 4 {
+                    return Err(DieselError::DatabaseError(
+                        DbErrorKind::CheckViolation,
+                        Box::new("The group is already full.".to_owned()),
+                    ));
+                }
+
                 // Relies on the primary key constraint to ensure that the user isn't already on
                 // another group, as well as on referential integrity to make sure both the user
                 // and team exist.
@@ -106,18 +122,44 @@ impl Team {
             .or_raise(|| Error::upstream("Failed to insert the user".into()))
     }
 
-    /// Leave a team
+    /// Leave whatever team the user is joined to
     ///
     /// # Errors
     /// Will return an error if the user doesn't exists or if the user does not belong to the team.
     /// May return an error if there's an issue communicating with the database.
-    pub async fn leave(
+    pub async fn leave(user: Uuid, connection: PgConnection) -> exn::Result<usize, Error> {
+        use schema::member_of::dsl::member_of;
+
+        connection
+            .interact(move |connection| diesel::delete(member_of.find(user)).execute(connection))
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+    }
+
+    /// Update the name of the team the user currently belongs to
+    ///
+    /// # Errors
+    /// Will return an error if the user doesn't belong to any team.
+    /// May return an error if there's an issue communicating with the database.
+    pub async fn update(
         user: Uuid,
-        team: Uuid,
+        name: String,
         connection: PgConnection,
     ) -> exn::Result<usize, Error> {
+        use schema::member_of::dsl::{member_of, team as team_id};
+        use schema::team::dsl::{id, name as name_dsl, team};
+
         connection
-            .interact(move |connection| todo!())
+            .interact(move |connection| {
+                let team_fk: Uuid = member_of.find(user).select(team_id).first(connection)?;
+
+                update(team.filter(id.eq(team_fk)))
+                    .set(name_dsl.eq(name))
+                    .execute(connection)
+            })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
