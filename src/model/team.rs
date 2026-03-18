@@ -4,7 +4,7 @@ use diesel::{
     dsl::count,
     insert_into,
     prelude::{Identifiable, Insertable, Queryable},
-    result::{DatabaseErrorKind as DbErrorKind, Error as DieselError},
+    result::Error as DieselError,
     update,
 };
 

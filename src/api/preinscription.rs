@@ -10,12 +10,11 @@ use crate::{database::Pool, error::ErrorResponse, model::preinscription::Preinsc
 /// # Errors
 /// Will return an error if the email is malformed, if it's not unique, if there's an issue
 /// communicating with the database, or if the authentication fails.
+#[tracing::instrument(skip_all, name = "/v0/preinscribe", fields(method = "PUT"))]
 pub async fn preinscribe(
     State(pool): State<Arc<Pool>>,
     Json(email): Json<Email>,
 ) -> Result<StatusCode, ErrorResponse> {
-    tracing::trace!("[API Call] PUT /v0/preinscribe");
-
     Preinscription::new(&email)
         .preinscribe(pool.get().await?)
         .await?;

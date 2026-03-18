@@ -7,19 +7,13 @@ use axum::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
-use tracing_subscriber::{EnvFilter, FmtSubscriber};
+use backend::{api, database, telemetry::init_tracing_subscriber};
 
-use backend::{api, database};
-
+#[tracing::instrument]
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok(); // Load .env file as env variables
-    tracing::subscriber::set_global_default(
-        FmtSubscriber::builder()
-            .with_env_filter(EnvFilter::from_default_env())
-            .finish(),
-    )
-    .unwrap();
+    let _guard = init_tracing_subscriber();
 
     let bind = env::var("BIND_ADDRESS").expect("Missing server's `BIND_ADDRESS` env variable");
     let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");

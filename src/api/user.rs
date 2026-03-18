@@ -22,7 +22,7 @@ use crate::{
     model::user::User,
 };
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct UidQuery {
     id: Option<uuid::Uuid>,
     qr: Option<String>,
@@ -52,13 +52,12 @@ impl UidQuery {
 /// # Errors
 /// Will return an error if the user object is malformed, if it's not unique, if there's an issue
 /// communicating with the database, or if authentication fails.
+#[tracing::instrument(skip_all, name = "/v0/user/sign_up", fields(method = "PUT"))]
 pub async fn sign_up(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Json(user): Json<User>,
 ) -> Result<StatusCode, ErrorResponse> {
-    tracing::trace!("[API Call] PUT /v0/user/sign_up");
-
     let Claims { sub, .. } = authenticate(bearer.token())?;
     _ = user.create(sub, pool.get().await?).await?;
 
@@ -71,14 +70,13 @@ pub async fn sign_up(
 /// Will return an error if the user had already been checked in, if it doesn't exist, if the user
 /// id to be ckecked in wasn't passed, if there's an issue communicating with the database,
 /// or if authentication fails.
+#[tracing::instrument(skip(pool, bearer), name = "/v0/user/check_in", fields(method = "PUT"))]
 pub async fn check_in(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(uid): Query<UidQuery>,
 ) -> Result<(), ErrorResponse> {
-    tracing::trace!("[API Call] PUT /v0/user/check_in");
-
-    let Claims { sub, role } = authenticate(bearer.token())?;
+    let Claims { role, .. } = authenticate(bearer.token())?;
     if role != ADMIN_ROLE {
         return Err(ErrorResponse::from(exn::Exn::new(Error::authentication(
             AuthenticationError::InsufficientPermissions,
@@ -93,11 +91,10 @@ pub async fn check_in(
     let uid = uid.get().unwrap_or_default();
 
     User::check_in(uid, pool.get().await?).await?;
-    tracing::trace!("[CHECK IN] {sub} checked in {uid}");
     Ok(())
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct Colors {
     #[serde(rename = "m")]
     module: Option<String>,
@@ -114,13 +111,11 @@ pub struct Colors {
 /// Never, should be infallible
 /// (Technically, it can panic if the hardcoded string "`image/svg+xml`" stops being considered
 /// ASCII or if it stops being considered a valid value for the `CONTENT_TYPE` header.)
-#[allow(clippy::unused_async)]
+#[tracing::instrument(skip_all, name = "/v0/user/qr.svg", fields(method = "GET"))]
 pub async fn qr(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(style): Query<Colors>,
 ) -> Result<Response, ErrorResponse> {
-    tracing::trace!("[API Call] GET /v0/user/qr.svg");
-
     let Claims { sub, .. } = authenticate(bearer.token())?;
 
     let Ok(qr) = QRBuilder::new(BASE64_STANDARD_NO_PAD.encode(sub.as_bytes())).build() else {
@@ -155,20 +150,19 @@ pub async fn qr(
 /// Will return an error if the user being fetched doesn't exist or doesn't have an entry
 /// associated with it. It will also return an error if the queries are malformed, if
 /// authentication fails or if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user", fields(method = "GET"))]
 pub async fn get(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(uid): Query<UidQuery>,
 ) -> Result<Json<User>, ErrorResponse> {
-    tracing::trace!("[API Call] GET /v0/user");
-
     let Claims { sub, role } = authenticate(bearer.token())?;
 
     // If the caller is an admin and they've provided a uid, use that uid. Otherwise use the
     // JWT's subject
     let uid = match (role == ADMIN_ROLE, uid.get()) {
         (true, Some(uid)) => {
-            tracing::trace!("[PRIVACY] {sub} is checking the info for {uid}");
+            tracing::trace!(target: "privacy", organizer = sub.to_string(), participant = uid.to_string());
             uid
         }
         _ => sub,

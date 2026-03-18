@@ -21,8 +21,6 @@ impl Pool {
     /// # Panics
     /// Never, the unwrap is for an infallible operation
     pub async fn from_url(url: &str) -> exn::Result<Self, Error> {
-        tracing::info!("Building connection pool...");
-
         let manager = Manager::new(url, Runtime::Tokio1);
 
         // Infallible!
@@ -44,10 +42,9 @@ impl Pool {
     /// # Errors
     /// Will return an error if there is a timeout or a connection error trying to retrieve a connection from the pool
     pub async fn get(&self) -> exn::Result<Connection, Error> {
-        self.0
-            .get()
-            .await
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to get a connection from the pool".into()))
+        self.0.get().await.map_err(Error::from).or_raise(|| {
+            tracing::warn!(target: "database", err = "pool_fetch");
+            Error::upstream("Failed to get a connection from the pool".into())
+        })
     }
 }
