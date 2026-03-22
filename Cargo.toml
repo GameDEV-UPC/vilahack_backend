@@ -31,14 +31,12 @@ uuid = { version = "1.20", features = ["serde", "rng", "v4"] }
 
 # Observability
 tracing = { version = "0.1", features = ["attributes"] }
-tracing-core = "0.1.36"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = "0.32"
 opentelemetry = "0.31"
 opentelemetry_sdk = "0.31"
-opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
-opentelemetry-semantic-conventions = "0.31.0"
-opentelemetry-stdout = "0.31.0"
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
+opentelemetry-appender-tracing = { version = "0.31.1", features = ["tracing-opentelemetry"] }
 
 # Env access
 dotenvy = "0.15"

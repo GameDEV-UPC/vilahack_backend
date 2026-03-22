@@ -52,7 +52,7 @@ impl UidQuery {
 /// # Errors
 /// Will return an error if the user object is malformed, if it's not unique, if there's an issue
 /// communicating with the database, or if authentication fails.
-#[tracing::instrument(skip_all, name = "/v0/user/sign_up", fields(method = "PUT"))]
+#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/user/sign_up", fields(method = "PUT"))]
 pub async fn sign_up(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
@@ -70,7 +70,7 @@ pub async fn sign_up(
 /// Will return an error if the user had already been checked in, if it doesn't exist, if the user
 /// id to be ckecked in wasn't passed, if there's an issue communicating with the database,
 /// or if authentication fails.
-#[tracing::instrument(skip(pool, bearer), name = "/v0/user/check_in", fields(method = "PUT"))]
+#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip(pool, bearer), name = "/v0/user/check_in", fields(method = "PUT"))]
 pub async fn check_in(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
@@ -111,7 +111,7 @@ pub struct Colors {
 /// Never, should be infallible
 /// (Technically, it can panic if the hardcoded string "`image/svg+xml`" stops being considered
 /// ASCII or if it stops being considered a valid value for the `CONTENT_TYPE` header.)
-#[tracing::instrument(skip_all, name = "/v0/user/qr.svg", fields(method = "GET"))]
+#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/user/qr.svg", fields(method = "GET"))]
 pub async fn qr(
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Query(style): Query<Colors>,
@@ -150,7 +150,7 @@ pub async fn qr(
 /// Will return an error if the user being fetched doesn't exist or doesn't have an entry
 /// associated with it. It will also return an error if the queries are malformed, if
 /// authentication fails or if there's an issue communicating with the database.
-#[tracing::instrument(skip_all, name = "/v0/user", fields(method = "GET"))]
+#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/user", fields(method = "GET"))]
 pub async fn get(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,

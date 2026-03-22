@@ -232,6 +232,7 @@ impl From<DieselErr> for Error {
     }
 }
 
+#[derive(Debug)]
 pub struct ErrorResponse(Exn<Error>);
 
 impl std::convert::From<exn::Exn<Error>> for ErrorResponse {

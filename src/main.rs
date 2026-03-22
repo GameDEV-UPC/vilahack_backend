@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, str::FromStr, sync::Arc};
 
 use axum::{
     Router,
@@ -8,12 +8,18 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 
 use backend::{api, database, telemetry::init_tracing_subscriber};
+use tracing::Level;
 
 #[tracing::instrument]
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok(); // Load .env file as env variables
-    let _guard = init_tracing_subscriber();
+    let deployment = env::var("DEPLOYMENT").expect("Missing `DEPLOYMENT` env variable");
+    let log_level =
+        Level::from_str(&env::var("RUST_LOG").expect("Missing `TRACER_NAME` env variable"))
+            .expect("Could not parce `RUST_LOG` env variable");
+
+    let _guard = init_tracing_subscriber(deployment, log_level);
 
     let bind = env::var("BIND_ADDRESS").expect("Missing server's `BIND_ADDRESS` env variable");
     let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");
