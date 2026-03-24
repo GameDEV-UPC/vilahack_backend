@@ -248,6 +248,6 @@ impl Team {
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+            .or_raise(|| Error::upstream("Failed to get team summary".into()))
     }
 }

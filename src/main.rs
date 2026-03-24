@@ -24,12 +24,18 @@ async fn main() {
     let bind = env::var("BIND_ADDRESS").expect("Missing server's `BIND_ADDRESS` env variable");
     let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");
 
-    let allow_origin = env::var("ALLOW_ORIGIN")
+    let allow_origins: Vec<HeaderValue> = env::var("ALLOW_ORIGIN")
         .expect("Missing `ALLOW_ORIGIN`")
-        .parse::<HeaderValue>()
-        .expect("Failed to parse `ALLOW_ORIGIN`");
+        .split(' ')
+        .map(|origin| {
+            origin
+                .parse::<HeaderValue>()
+                .expect("Failed to parse `ALLOW_ORIGIN`")
+        })
+        .collect();
+
     let cors_layer = CorsLayer::new()
-        .allow_origin(allow_origin)
+        .allow_origin(allow_origins)
         .allow_methods([Method::GET, Method::PUT])
         .allow_headers(Any);
 
