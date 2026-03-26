@@ -10,7 +10,7 @@ use headers::{Authorization, authorization::Bearer};
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 
 use crate::{
-    authentication::{Claims, authenticate},
+    authentication::Authenticated,
     database::Pool,
     error::ErrorResponse,
     model::team::{Team, TeamSummary},
@@ -21,12 +21,12 @@ use crate::{
 /// # Errors
 /// Will return an error if the user doesn't belong to any team, or if they fail
 /// to authenticate. May return an error if there's an issue communicating with the database
-#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/team", fields(method = "GET"))]
+#[tracing::instrument(skip_all, name = "/v0/team", fields(method = "GET"))]
 pub async fn summary(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
 ) -> Result<Json<TeamSummary>, ErrorResponse> {
-    let Claims { sub, .. } = authenticate(bearer.token())?;
+    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
 
     Ok(Json(Team::summary(sub, pool.get().await?).await?))
 }
@@ -36,14 +36,13 @@ pub async fn summary(
 /// # Errors
 /// Will return an error if the user doesn't exist, if they already belong to a team or if they
 /// fail to authenticate. May return an error if there's an issue communicating with the database.
-#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/team", fields(method = "PUT"))]
+#[tracing::instrument(skip_all, name = "/v0/team", fields(method = "PUT"))]
 pub async fn new(
     State(pool): State<Arc<Pool>>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    // TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    Authenticated { sub, .. }: Authenticated,
     Path(name): Path<String>,
 ) -> Result<Json<String>, ErrorResponse> {
-    let Claims { sub, .. } = authenticate(bearer.token())?;
-
     let team = Team::new(name, sub, pool.get().await?).await?;
     Ok(Json(BASE64_STANDARD_NO_PAD.encode(team.id.as_bytes())))
 }
@@ -54,13 +53,13 @@ pub async fn new(
 /// Will return an error if the team doesn't exist, if the team is full or if the user
 /// fails to authenticate. Will also return an error if the request is malformed (i.e the group id
 /// cannot be decoded.) May return an error if there's an issue communicating with the database.
-#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/team/join", fields(method = "PUT"))]
+#[tracing::instrument(skip_all, name = "/v0/team/join", fields(method = "PUT"))]
 pub async fn join(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Path(id): Path<String>,
 ) -> Result<Json<TeamSummary>, ErrorResponse> {
-    let Claims { sub, .. } = authenticate(bearer.token())?;
+    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
 
     let mut decoded: [u8; 16] = [0; 16];
     if BASE64_STANDARD_NO_PAD
@@ -81,12 +80,12 @@ pub async fn join(
 /// # Errors
 /// Will return an error if the user is not in a team or if they fail to authenticate. May return
 /// an error if there's an issue communicating to the database.
-#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/team/leave", fields(method = "PUT"))]
+#[tracing::instrument(skip_all, name = "/v0/team/leave", fields(method = "PUT"))]
 pub async fn leave(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
 ) -> Result<(), ErrorResponse> {
-    let Claims { sub, .. } = authenticate(bearer.token())?;
+    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
 
     Ok(Team::leave(sub, pool.get().await?).await?)
 }
@@ -96,13 +95,13 @@ pub async fn leave(
 /// # Errors
 /// Will return an error if the user is not in a team or if they fail to authenticate. May return
 /// an error if there's an issue communicating to the database.
-#[tracing::instrument(err(Debug, level = tracing::Level::INFO), skip_all, name = "/v0/team/update", fields(method = "PUT"))]
+#[tracing::instrument(skip_all, name = "/v0/team/update", fields(method = "PUT"))]
 pub async fn update(
     State(pool): State<Arc<Pool>>,
     TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
     Path(name): Path<String>,
 ) -> Result<(), ErrorResponse> {
-    let Claims { sub, .. } = authenticate(bearer.token())?;
+    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
 
     Ok(Team::update(sub, name, pool.get().await?).await?)
 }

@@ -30,6 +30,7 @@ pub enum AuthenticationError {
     InvalidSignature,
     InvalidKey,
     InvalidClaim,
+    Missing,
     NoMatchingKey,
     InvalidTimeRange,
     InsufficientPermissions,
@@ -244,13 +245,14 @@ impl std::convert::From<exn::Exn<Error>> for ErrorResponse {
 impl IntoResponse for ErrorResponse {
     fn into_response(self) -> axum::response::Response {
         // The root cause is the one that's propagated to the caller
-        let frame = match self.0.frame().children().last() {
-            Some(frame) => frame,
-            None => self.0.frame(),
-        };
+        let mut lowest_level = self.0.frame();
+
+        while let Some(lower_level) = lowest_level.children().first() {
+            lowest_level = lower_level;
+        }
 
         #[allow(clippy::option_if_let_else)]
-        let error: &Error = match frame.error().downcast_ref() {
+        let error: &Error = match lowest_level.error().downcast_ref() {
             Some(error) => error,
             None => &Error::upstream("Failed to downcast error. This should never happen".into()),
         };
@@ -258,19 +260,24 @@ impl IntoResponse for ErrorResponse {
         let http_code = match error.error_type {
             // Authentication errors
             Source::Authentication(AuthenticationError::Unknown) => {
+                tracing::warn!("{error:?}");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             Source::Authentication(_) => StatusCode::UNAUTHORIZED,
 
             // Database errors
             Source::Database(DatabaseError::Timeout | DatabaseError::Connection) => {
+                tracing::warn!("{error:?}");
                 StatusCode::GATEWAY_TIMEOUT
             }
             Source::Database(DatabaseError::NotFound) => StatusCode::NOT_FOUND,
             Source::Database(DatabaseError::ConstraintViolation) => StatusCode::PRECONDITION_FAILED,
 
             // Anything else
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
+            _ => {
+                tracing::warn!("{error:?}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (http_code, Json(error)).into_response()

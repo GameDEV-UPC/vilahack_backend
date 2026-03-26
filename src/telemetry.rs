@@ -99,6 +99,7 @@ pub fn init_tracing_subscriber(deployment: String, level: tracing::Level) -> Ote
     }
 }
 
+#[allow(clippy::struct_field_names)]
 pub struct OtelGuard {
     tracer_provider: SdkTracerProvider,
     meter_provider: SdkMeterProvider,
