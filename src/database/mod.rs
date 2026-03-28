@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use deadpool_diesel::{
-    Manager, ManagerConfig, Pool as ConnectionPool, RecyclingMethod, Runtime, postgres::Connection,
+    Manager, ManagerConfig, Pool as ConnectionPool, RecyclingMethod, postgres::Runtime, postgres::Connection,
 };
 use diesel::PgConnection;
 
@@ -36,6 +36,7 @@ impl Pool {
 
         // Infallible!
         let pool = ConnectionPool::builder(manager)
+            .runtime(Runtime::Tokio1)
             .create_timeout(FIVE_SECONDS)
             .wait_timeout(FIVE_SECONDS)
             .build()
