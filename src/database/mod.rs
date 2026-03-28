@@ -13,6 +13,7 @@ pub struct Pool(ConnectionPool<Manager<PgConnection>>);
 pub mod schema;
 
 const FIVE_SECONDS: Option<Duration> = Some(Duration::from_secs(5));
+const TEN_SECONDS: Option<Duration> = Some(Duration::from_secs(10));
 
 impl Pool {
     /// Builds a `PostgreSQL` connection pool from the provided database url
@@ -39,6 +40,7 @@ impl Pool {
             .runtime(Runtime::Tokio1)
             .create_timeout(FIVE_SECONDS)
             .wait_timeout(FIVE_SECONDS)
+            .recycle_timeout(TEN_SECONDS)
             .build()
             .unwrap();
 
