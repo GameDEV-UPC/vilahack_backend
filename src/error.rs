@@ -180,33 +180,39 @@ impl From<DieselErr> for Error {
                 message: "What was requested wasn't found on the database".into(),
             },
 
-            DieselErr::RollbackErrorOnCommit {..}
+            DieselErr::RollbackErrorOnCommit { .. }
             | DieselErr::RollbackTransaction
             | DieselErr::AlreadyInTransaction
             | DieselErr::NotInTransaction
             | DieselErr::BrokenTransactionManager
             | DieselErr::DatabaseError(
-                DatabaseErrorKind::UnableToSendCommand
-                | DatabaseErrorKind::ReadOnlyTransaction, _) => Self {
+                DatabaseErrorKind::UnableToSendCommand | DatabaseErrorKind::ReadOnlyTransaction,
+                _,
+            ) => Self {
                 error_type: Source::Database(DatabaseError::Transaction),
-                message: "Something went wrong while dealing with a transaction".into(),
+                message: format!(
+                    "Something went wrong while dealing with a transaction: {value:?}"
+                ),
             },
 
             DieselErr::InvalidCString(_)
             | DieselErr::DatabaseError(DatabaseErrorKind::SerializationFailure, _) => Self {
                 error_type: Source::Database(DatabaseError::Serialization),
-                message: "Something went wrong trying to convert to or from a format the database can understand".into(),
+                message: format!(
+                    "Something went wrong trying to convert to or from a format the database can understand: {value:?}"
+                ),
             },
 
-            DieselErr::SerializationError(err)
-            | DieselErr::DeserializationError(err) => Self {
+            DieselErr::SerializationError(err) | DieselErr::DeserializationError(err) => Self {
                 error_type: Source::Database(DatabaseError::Serialization),
-                message: format!("Something went wrong trying to convert to or from a format the database can understand: {err:?}"),
+                message: format!(
+                    "Something went wrong trying to convert to or from a format the database can understand: {err:?}"
+                ),
             },
 
             DieselErr::QueryBuilderError(_) => Self {
                 error_type: Source::Database(DatabaseError::Query),
-                message: "A query was submitted that's not possible to execute".into()
+                message: format!("A query was submitted that's not possible to execute: {value:?}"),
             },
 
             DieselErr::DatabaseError(
@@ -215,19 +221,23 @@ impl From<DieselErr> for Error {
                 | DatabaseErrorKind::RestrictViolation
                 | DatabaseErrorKind::NotNullViolation
                 | DatabaseErrorKind::CheckViolation
-                | DatabaseErrorKind::ExclusionViolation, info) => Self {
+                | DatabaseErrorKind::ExclusionViolation,
+                info,
+            ) => Self {
                 error_type: Source::Database(DatabaseError::ConstraintViolation),
                 message: info.message().into(),
             },
 
-            DieselErr::DatabaseError(DatabaseErrorKind::ClosedConnection, _) => Self {
+            DieselErr::DatabaseError(DatabaseErrorKind::ClosedConnection, err) => Self {
                 error_type: Source::Database(DatabaseError::Connection),
-                message: "Database closed the connection".into(),
+                message: format!("Database closed the connection: {err:?}"),
             },
 
             e => Self {
                 error_type: Source::Database(DatabaseError::Unknown),
-                message: format!("Something unexpected happened while attempting to communicate with the database: {e:?}"),
+                message: format!(
+                    "Something unexpected happened while attempting to communicate with the database: {e:?}"
+                ),
             },
         }
     }

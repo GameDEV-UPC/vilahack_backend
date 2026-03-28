@@ -1,13 +1,18 @@
-use deadpool_diesel::{Manager, Pool as ConnectionPool, Runtime, postgres::Connection};
+use std::time::Duration;
+
+use deadpool_diesel::{
+    Manager, ManagerConfig, Pool as ConnectionPool, RecyclingMethod, Runtime, postgres::Connection,
+};
 use diesel::PgConnection;
 
 use crate::error::Error;
 use exn::ResultExt;
 
-const MAX_POOL_SIZE: usize = 8;
 pub struct Pool(ConnectionPool<Manager<PgConnection>>);
 
 pub mod schema;
+
+const FIVE_SECONDS: Option<Duration> = Some(Duration::from_secs(5));
 
 impl Pool {
     /// Builds a `PostgreSQL` connection pool from the provided database url
@@ -21,11 +26,18 @@ impl Pool {
     /// # Panics
     /// Never, the unwrap is for an infallible operation
     pub async fn from_url(url: &str) -> exn::Result<Self, Error> {
-        let manager = Manager::new(url, Runtime::Tokio1);
+        let manager = Manager::from_config(
+            url,
+            Runtime::Tokio1,
+            ManagerConfig {
+                recycling_method: RecyclingMethod::Verified,
+            },
+        );
 
         // Infallible!
         let pool = ConnectionPool::builder(manager)
-            .max_size(MAX_POOL_SIZE)
+            .create_timeout(FIVE_SECONDS)
+            .wait_timeout(FIVE_SECONDS)
             .build()
             .unwrap();
 
