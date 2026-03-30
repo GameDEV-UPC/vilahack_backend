@@ -4,7 +4,7 @@ use axum::{
     Router,
     http::{
         HeaderValue, Method,
-        header::{ACCEPT, AUTHORIZATION},
+        header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     },
     routing::{get, put},
 };
