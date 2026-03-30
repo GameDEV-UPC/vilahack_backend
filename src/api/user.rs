@@ -18,7 +18,7 @@ use crate::{
     authentication::{ADMIN_ROLE, Authenticated},
     database::Pool,
     error::{AuthenticationError, Error, ErrorResponse},
-    model::application::Application,
+    model::application::{Application, ApplicationUpdate},
 };
 
 /// Create the row in the Application table
@@ -64,6 +64,21 @@ pub async fn get(
     };
 
     Ok(Json(Application::get(uid, pool.get().await?).await?))
+}
+
+/// Updates the user's application
+///
+/// # Errors
+/// Will return an error if the user hasn't made an application or if they're unauthenticated
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/application/update", fields(method = "PUT"))]
+pub async fn update(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { sub, .. }: Authenticated,
+    Json(updated): Json<ApplicationUpdate>,
+) -> Result<(), ErrorResponse> {
+    let _ = updated.update(sub, pool.get().await?).await?;
+    Ok(())
 }
 
 /// Set the check in timestamp for the user

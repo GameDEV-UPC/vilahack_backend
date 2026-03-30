@@ -47,7 +47,7 @@ async fn main() {
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
         .route("/v0/user/application", get(api::user::get))
         .route("/v0/user/application", put(api::user::apply))
-        // .route("/v0/user/application/update", put(api::user::update))
+        .route("/v0/user/application/update", put(api::user::update))
         .route("/v0/user/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
         .route("/v0/team", get(api::team::summary))
