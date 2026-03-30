@@ -40,7 +40,7 @@ async fn main() {
     let cors_layer = CorsLayer::new()
         .allow_origin(allow_origins)
         .allow_methods([Method::GET, Method::PUT])
-        .allow_headers([AUTHORIZATION, ACCEPT]);
+        .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
