@@ -3,7 +3,7 @@ use deadpool_diesel::{InteractError, postgres::PoolError};
 use diesel::{result::DatabaseErrorKind, result::Error as DieselErr};
 use jsonwebtoken::errors::ErrorKind as JwtErr;
 
-use exn::Exn;
+use exn::{Exn, ResultExt};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -240,6 +240,22 @@ impl From<DieselErr> for Error {
                 ),
             },
         }
+    }
+}
+
+pub trait FlattenErr<T> {
+    /// Flattens nested errors caused by using the connection pool
+    ///
+    /// # Errors
+    /// Forwards whatever error was emmited either by the database or pool, flattened into an Exn
+    /// error.
+    fn flatten_err(self) -> exn::Result<T, Error>;
+}
+
+impl<T> FlattenErr<T> for Result<Result<T, diesel::result::Error>, deadpool_diesel::InteractError> {
+    fn flatten_err(self) -> exn::Result<T, Error> {
+        self.map_err(Error::from)?
+            .or_raise(|| Error::upstream("Failed to execute query".into()))
     }
 }
 

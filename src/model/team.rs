@@ -10,9 +10,10 @@ use diesel::{
 
 use uuid::Uuid;
 
-use exn::ResultExt;
-
-use crate::{database::schema, error::Error};
+use crate::{
+    database::schema,
+    error::{Error, FlattenErr},
+};
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone)]
 #[diesel(primary_key(user))]
@@ -44,8 +45,8 @@ impl Team {
     /// Create the team with the given name and join the creator to it.
     ///
     /// # Errors
-    /// Will return an error if the user is already in a team.
-    /// May return an error if there's an issue communicating with the database.
+    /// Will return an error if the user hasn't made an application or if they're already on a team.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn new(
         name: String,
         creator: Uuid,
@@ -81,18 +82,15 @@ impl Team {
                 })
             })
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+            .flatten_err()
     }
 
     /// Join an existing team
     ///
     /// # Errors
-    /// Will return an error if the team or user don't exist, or if the user is already in a team.
-    /// It will also return an error if the group already has 4 members.
-    /// May return an error if there's an issue communicating with the database.
+    /// Will return an error if the user hasn't made an application, if they're already in a team
+    /// or if the team is full.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn join(user: Uuid, team: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
         use schema::member_of::dsl::{member_of, team as team_dsl, user as user_dsl};
 
@@ -115,10 +113,7 @@ impl Team {
                     .execute(connection)
             })
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+            .flatten_err()?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::ConstraintViolation,
@@ -141,18 +136,15 @@ impl Team {
     /// Leave whatever team the user is joined to
     ///
     /// # Errors
-    /// Will return an error if the user doesn't exists or if the user does not belong to the team.
-    /// May return an error if there's an issue communicating with the database.
+    /// Will return an error if the user doesn't belong to the team.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn leave(user: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
         use schema::member_of::dsl::member_of;
 
         match connection
             .interact(move |connection| diesel::delete(member_of.find(user)).execute(connection))
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+            .flatten_err()?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::NotFound,
@@ -176,7 +168,7 @@ impl Team {
     ///
     /// # Errors
     /// Will return an error if the user doesn't belong to any team.
-    /// May return an error if there's an issue communicating with the database.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn update(
         user: Uuid,
         name: String,
@@ -194,10 +186,7 @@ impl Team {
                     .execute(connection)
             })
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))?
+            .flatten_err()?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::Unknown,
@@ -219,11 +208,11 @@ impl Team {
     ///
     /// # Errors
     /// Will return an error if the user is not in any team
-    /// May return an error if there's an issue communicating with the database.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn summary(user: Uuid, connection: PgConnection) -> exn::Result<TeamSummary, Error> {
+        use schema::application::dsl::{application, id as user_id, name as user_name};
         use schema::member_of::dsl::{member_of, team as team_id, user as team_member};
         use schema::team::dsl::{name, team};
-        use schema::user::dsl::{id as user_id, name as user_name, user as user_dsl};
 
         use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 
@@ -233,7 +222,7 @@ impl Team {
                 let team_name = team.find(team_fk).select(name).first(connection)?;
 
                 let member_names: Vec<String> = member_of
-                    .inner_join(user_dsl.on(team_member.eq(user_id)))
+                    .inner_join(application.on(team_member.eq(user_id)))
                     .filter(team_id.eq(team_fk))
                     .select(user_name)
                     .load::<String>(connection)?;
@@ -245,9 +234,6 @@ impl Team {
                 })
             })
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to get team summary".into()))
+            .flatten_err()
     }
 }

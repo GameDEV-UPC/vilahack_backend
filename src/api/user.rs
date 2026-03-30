@@ -6,8 +6,6 @@ use axum::{
     http::{HeaderValue, StatusCode, header},
     response::Response,
 };
-use axum_extra::TypedHeader;
-use headers::{Authorization, authorization::Bearer};
 
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 use fast_qr::{
@@ -16,67 +14,70 @@ use fast_qr::{
 };
 
 use crate::{
+    api::{OptionalUid, Uid},
     authentication::{ADMIN_ROLE, Authenticated},
     database::Pool,
     error::{AuthenticationError, Error, ErrorResponse},
-    model::user::User,
+    model::application::Application,
 };
 
-#[derive(serde::Deserialize, Debug)]
-pub struct UidQuery {
-    id: Option<uuid::Uuid>,
-    qr: Option<String>,
-}
-
-impl UidQuery {
-    fn get(&self) -> Option<uuid::Uuid> {
-        if self.id.is_some() {
-            self.id
-        } else if let Some(encoded) = &self.qr {
-            let mut decoded: [u8; 16] = [0; 16];
-            if BASE64_STANDARD_NO_PAD
-                .decode_slice(encoded, &mut decoded)
-                .is_err()
-            {
-                return None;
-            }
-            Some(uuid::Uuid::from_bytes(decoded))
-        } else {
-            None
-        }
-    }
-}
-
-/// Create the row in the public.User table
+/// Create the row in the Application table
 ///
 /// # Errors
-/// Will return an error if the user object is malformed, if it's not unique, if there's an issue
-/// communicating with the database, or if authentication fails.
-#[tracing::instrument(skip_all, name = "/v0/user/sign_up", fields(method = "PUT"))]
-pub async fn sign_up(
+/// Will return an error if the application object is malformed, if the user is unauthenticated or
+/// if they've already applied.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/application", fields(method = "PUT"))]
+pub async fn apply(
     State(pool): State<Arc<Pool>>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-    Json(user): Json<User>,
+    Authenticated { sub, .. }: Authenticated,
+    Json(application): Json<Application>,
 ) -> Result<StatusCode, ErrorResponse> {
-    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
-    _ = user.create(sub, pool.get().await?).await?;
-
+    _ = application.create(sub, pool.get().await?).await?;
     Ok(StatusCode::OK)
+}
+
+/// Returns the user's application
+///
+/// If the caller is an admin and they provided a uid on the query,
+/// the data of the user with that uid will be returned. Otherwise, the data of the caller's JWT
+/// subject will be returned.
+///
+/// # Errors
+/// Will return an error if the user hasn't made an application, if the queries are malformed or if
+/// the user is unauthenticated.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/application", fields(method = "GET"))]
+pub async fn get(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { sub, role }: Authenticated,
+    OptionalUid(uid): OptionalUid,
+) -> Result<Json<Application>, ErrorResponse> {
+    // If the caller is an admin and they've provided a uid, use that uid. Otherwise use the
+    // JWT's subject
+    let uid = match (role == ADMIN_ROLE, uid) {
+        (true, Some(uid)) => {
+            tracing::info!(target: "privacy", organizer = sub.to_string(), participant = uid.to_string());
+            uid
+        }
+        _ => sub,
+    };
+
+    Ok(Json(Application::get(uid, pool.get().await?).await?))
 }
 
 /// Set the check in timestamp for the user
 ///
 /// # Errors
-/// Will return an error if the user had already been checked in, if it doesn't exist, if the user
-/// id to be ckecked in wasn't passed, if there's an issue communicating with the database,
-/// or if authentication fails.
-#[tracing::instrument(skip(pool, bearer), name = "/v0/user/check_in", fields(method = "PUT"))]
+/// Will return an error if the user hasn't made an applicationm if they've already checked in or
+/// if they're not accepted. Will also return an error if the caller is not an admin.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/check_in", fields(method = "PUT"))]
 pub async fn check_in(
     State(pool): State<Arc<Pool>>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-    Query(uid): Query<UidQuery>,
+    Authenticated { role, sub }: Authenticated,
+    Uid(uid): Uid,
 ) -> Result<(), ErrorResponse> {
-    let Authenticated { role, .. } = Authenticated::from_token(bearer.token())?;
     if role != ADMIN_ROLE {
         return Err(ErrorResponse::from(exn::Exn::new(Error::authentication(
             AuthenticationError::InsufficientPermissions,
@@ -84,13 +85,10 @@ pub async fn check_in(
         ))));
     }
 
-    // I'm going all the way to the database with a thing that I know will cause an error. This is
-    // bad on resources. But realistically will never happen, or at least not often. Since this API
-    // will be called by a frontend, the frontend will always include the user id.
-    // I'm doing it this way because it really simplifies things on the backend.
-    let uid = uid.get().unwrap_or_default();
+    Application::check_in(uid, pool.get().await?).await?;
 
-    User::check_in(uid, pool.get().await?).await?;
+    tracing::info!(target: "check_in", organizer = sub.to_string(), participant = uid.to_string());
+
     Ok(())
 }
 
@@ -113,11 +111,9 @@ pub struct Colors {
 /// ASCII or if it stops being considered a valid value for the `CONTENT_TYPE` header.)
 #[tracing::instrument(skip_all, name = "/v0/user/qr.svg", fields(method = "GET"))]
 pub async fn qr(
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
+    Authenticated { sub, .. }: Authenticated,
     Query(style): Query<Colors>,
 ) -> Result<Response, ErrorResponse> {
-    let Authenticated { sub, .. } = Authenticated::from_token(bearer.token())?;
-
     let Ok(qr) = QRBuilder::new(BASE64_STANDARD_NO_PAD.encode(sub.as_bytes())).build() else {
         todo!()
     };
@@ -138,35 +134,4 @@ pub async fn qr(
         )
         .body(body::Body::from(qr))
         .expect("HTTP headers are broken! The web is in shambles."))
-}
-
-/// Returns all of the user's data.
-///
-/// If the caller is an admin and they provided a uid on the query,
-/// the data of the user with that uid will be returned. Otherwise, the data of the caller's JWT
-/// subject will be returned.
-///
-/// # Errors
-/// Will return an error if the user being fetched doesn't exist or doesn't have an entry
-/// associated with it. It will also return an error if the queries are malformed, if
-/// authentication fails or if there's an issue communicating with the database.
-#[tracing::instrument(skip_all, name = "/v0/user", fields(method = "GET"))]
-pub async fn get(
-    State(pool): State<Arc<Pool>>,
-    TypedHeader(Authorization(bearer)): TypedHeader<Authorization<Bearer>>,
-    Query(uid): Query<UidQuery>,
-) -> Result<Json<User>, ErrorResponse> {
-    let Authenticated { sub, role } = Authenticated::from_token(bearer.token())?;
-
-    // If the caller is an admin and they've provided a uid, use that uid. Otherwise use the
-    // JWT's subject
-    let uid = match (role == ADMIN_ROLE, uid.get()) {
-        (true, Some(uid)) => {
-            tracing::trace!(target: "privacy", organizer = sub.to_string(), participant = uid.to_string());
-            uid
-        }
-        _ => sub,
-    };
-
-    Ok(Json(User::get(uid, pool.get().await?).await?))
 }

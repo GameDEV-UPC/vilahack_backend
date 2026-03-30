@@ -12,11 +12,9 @@ use diesel::{
     update,
 };
 
-use exn::ResultExt;
-
 use crate::{
     database::schema::{self, sql_types::AccessibilityType},
-    error::Error,
+    error::{Error, FlattenErr},
 };
 
 #[derive(
@@ -194,9 +192,9 @@ impl FromSql<AccessibilityType, Pg> for AccessibilityNeeds {
     serde::Deserialize,
 )]
 #[diesel(primary_key(id))]
-#[diesel(table_name = schema::user)]
+#[diesel(table_name = schema::application)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct User {
+pub struct Application {
     #[serde(skip_deserializing, skip_serializing)]
     pub id: Uuid,
     pub name: String,
@@ -227,39 +225,60 @@ pub struct User {
     pub status: Status,
 }
 
-impl User {
-    /// Insert the user into the public.user table
+impl Application {
+    /// Insert the the application for the given user
     ///
     /// # Errors
-    /// May return an error if there's an issue communicating with the database
+    /// Will return an error if the user doesn't exist or if they've already made an application.
+    /// May return an error if there's an issue communicating with the database.
     pub async fn create(mut self, id: Uuid, connection: Connection) -> exn::Result<usize, Error> {
-        use schema::user::dsl::user;
+        use schema::application::dsl::application;
 
         self.id = id;
         self.created_at = Utc::now();
 
         connection
-            .interact(move |connection| insert_into(user).values(self).execute(connection))
+            .interact(move |connection| insert_into(application).values(self).execute(connection))
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to insert the user".into()))
+            .flatten_err()
     }
+
+    /// Get the application's details
+    ///
+    /// # Errors
+    /// Will return an error if the user doesn't have an application.
+    /// Might return an error if there's an issue communicating with the database.
+    pub async fn get(id: Uuid, connection: Connection) -> exn::Result<Self, Error> {
+        use schema::application::dsl::application;
+
+        connection
+            .interact(move |connection| {
+                application
+                    .find(id)
+                    .select(Self::as_select())
+                    .first(connection)
+            })
+            .await
+            .flatten_err()
+    }
+
+    // Update handled by ApplicationUpdate
+    // Delete handled by cascade of user delete
 
     /// Check in the user now
     ///
     /// # Errors
-    /// Will return an error if an inexistent user id is passed or if it's attempted on a user
-    /// that's already been checked in or not accepted. May return an error if there's an issue
-    /// communicating with the database.
+    /// Will return an error if the given user isn't accepted, is already checked in or if they
+    /// don't have an application in the first place.
+    /// Might return an error if there's an issue communicating with the database
     pub async fn check_in(uid: Uuid, connection: Connection) -> exn::Result<(), Error> {
-        use schema::user::dsl::{check_in, id, status, user};
+        use schema::application::dsl::{application, check_in, id, status};
 
         match connection
             .interact(move |connection| {
                 update(
-                    user.filter(id.eq(uid))
+                    application
+                        .filter(id.eq(uid))
                         .filter(check_in.is_null())
                         .filter(status.eq(Status::Accepted)),
                 )
@@ -267,10 +286,7 @@ impl User {
                 .execute(connection)
             })
             .await
-            .map_err(Error::from) // Això és una mica lleig però bueno
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to update the check_in timestamp".into()))?
+            .flatten_err()?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::ConstraintViolation,
@@ -290,21 +306,51 @@ impl User {
             }
         }
     }
+}
 
-    /// Get all the user's info
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Queryable, AsChangeset, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[diesel(table_name = schema::application)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ApplicationUpdate {
+    pub name: Option<String>,
+    pub phone: Option<String>,
+    pub longitude: Option<f32>,
+    pub latitude: Option<f32>,
+    pub studies: Option<String>,
+    pub university: Option<String>,
+    pub gender: Option<Gender>,
+    pub discovery: Option<Discovery>,
+    pub experience: Option<Experience>,
+    pub first_time: Option<bool>,
+    pub why: Option<String>,
+    pub tshirt_size: Option<TshirSize>,
+    pub dietary_preference: Option<serde_json::Value>,
+    pub accessibility_needs: Option<AccessibilityNeeds>,
+    pub dvcs: Option<String>,
+    pub linkedin: Option<String>,
+    pub website: Option<String>,
+    pub allows_cv_sharing: Option<bool>,
+    pub allows_marketing: Option<bool>,
+    pub comment: Option<String>,
+}
+
+impl ApplicationUpdate {
+    /// Updates the given value for the application
     ///
     /// # Errors
-    /// Will return an error if an inexistent user id is passed or if the user has not made an
-    /// application. May return an error if there's an issue communicating with the database.
-    pub async fn get(uid: Uuid, connection: Connection) -> exn::Result<Self, Error> {
-        use schema::user::dsl::user;
+    /// Will return an error if the user hasn't made an application or if they're already accepted.
+    /// Might return an error if there's an issue communicating with the database
+    pub async fn update(self, uid: Uuid, connection: Connection) -> exn::Result<usize, Error> {
+        use schema::application::dsl::{application, id, status};
 
         connection
-            .interact(move |connection| user.find(uid).select(Self::as_select()).first(connection))
+            .interact(move |connection| {
+                update(application.filter(id.eq(uid).and(status.eq(Status::Applied))))
+                    .set(self)
+                    .execute(connection)
+            })
             .await
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
-            .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to get the user from the database".into()))
+            .flatten_err()
     }
 }

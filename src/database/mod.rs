@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use deadpool_diesel::{
-    Manager, ManagerConfig, Pool as ConnectionPool, RecyclingMethod, postgres::Runtime, postgres::Connection,
+    Manager, ManagerConfig, Pool as ConnectionPool, RecyclingMethod, postgres::Connection,
+    postgres::Runtime,
 };
 use diesel::PgConnection;
 
@@ -12,8 +13,7 @@ pub struct Pool(ConnectionPool<Manager<PgConnection>>);
 
 pub mod schema;
 
-const FIVE_SECONDS: Option<Duration> = Some(Duration::from_secs(5));
-const TEN_SECONDS: Option<Duration> = Some(Duration::from_secs(10));
+const ONE_SECOND: Option<Duration> = Some(Duration::from_secs(1));
 
 impl Pool {
     /// Builds a `PostgreSQL` connection pool from the provided database url
@@ -38,9 +38,9 @@ impl Pool {
         // Infallible!
         let pool = ConnectionPool::builder(manager)
             .runtime(Runtime::Tokio1)
-            .create_timeout(FIVE_SECONDS)
-            .wait_timeout(FIVE_SECONDS)
-            .recycle_timeout(TEN_SECONDS)
+            .create_timeout(ONE_SECOND)
+            .wait_timeout(ONE_SECOND)
+            .recycle_timeout(ONE_SECOND)
             .build()
             .unwrap();
 

@@ -40,7 +40,7 @@ diesel::table! {
     use super::sql_types::{TshirtSize, Experience, Gender, Discovery, Status, AccessibilityType};
     use diesel::sql_types::{Uuid, Nullable, Text, Jsonb, Int2, Bool, Float, Timestamptz};
 
-    user (id) {
+    application (id) {
         id -> Uuid,
         name -> Text,
         phone -> Text,
@@ -69,7 +69,7 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(member_of -> user (user));
+diesel::joinable!(member_of -> application (user));
 
 diesel::table! {
     member_of (user) {
@@ -88,7 +88,7 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(user, member_of, team);
+diesel::allow_tables_to_appear_in_same_query!(application, member_of, team);
 
 diesel::table! {
     preinscription (email) {

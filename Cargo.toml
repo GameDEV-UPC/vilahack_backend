@@ -1,33 +1,30 @@
 [package]
 name = "backend"
-version = "0.3.8"
+version = "0.4.0"
 edition = "2024"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 # Database connection
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }
-deadpool-diesel = { version = "0.6.1", features = ["postgres"] }
-diesel-derive-enum = { version = "2.1", features = ["postgres"] }
+deadpool-diesel = { version = "0.6", features = ["postgres"] }
+diesel-derive-enum = { version = "2", features = ["postgres"] }
 
 # HTTP server / API
 axum = "0.8"
-axum-extra = { version = "0.12", features = ["typed-header", "file-stream"] }
 tower-http = { version = "0.6", features = ["cors"] }
-headers = "0.4"
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 
 # Parsing and types
 serde = { version = "1", features = ["serde_derive"] }
-serde_json = "1.0"
-base64 = "0.22.1"
-bitflags = { version = "2.10", features = ["serde"] }
+serde_json = "1"
+base64 = "0.22"
+bitflags = { version = "2", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 serde-email = "3.2"
-url = { version = "2.5", features = ["serde"] }
-uuid = { version = "1.20", features = ["serde", "rng", "v4"] }
+uuid = { version = "1", features = ["serde", "rng", "v4"] }
 
 # Observability
 tracing = { version = "0.1", features = ["attributes"] }

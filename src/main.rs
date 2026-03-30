@@ -2,10 +2,13 @@ use std::{env, str::FromStr, sync::Arc};
 
 use axum::{
     Router,
-    http::{HeaderValue, Method},
+    http::{
+        HeaderValue, Method,
+        header::{ACCEPT, AUTHORIZATION},
+    },
     routing::{get, put},
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use backend::{api, database, telemetry::init_tracing_subscriber};
 use tracing::Level;
@@ -37,13 +40,14 @@ async fn main() {
     let cors_layer = CorsLayer::new()
         .allow_origin(allow_origins)
         .allow_methods([Method::GET, Method::PUT])
-        .allow_headers(Any);
+        .allow_headers([AUTHORIZATION, ACCEPT]);
 
     let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
-        .route("/v0/user", get(api::user::get))
-        .route("/v0/user/sign_up", put(api::user::sign_up))
+        .route("/v0/user/application", get(api::user::get))
+        .route("/v0/user/application", put(api::user::apply))
+        // .route("/v0/user/application/update", put(api::user::update))
         .route("/v0/user/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
         .route("/v0/team", get(api::team::summary))
