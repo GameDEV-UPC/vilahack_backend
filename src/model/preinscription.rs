@@ -1,10 +1,9 @@
 use deadpool_diesel::postgres::Connection;
 use diesel::{insert_into, prelude::*};
 
-use crate::{
-    database::schema,
-    error::{Error, FlattenErr},
-};
+use exn::ResultExt;
+
+use crate::{database::schema, error::Error};
 
 #[derive(
     Queryable,
@@ -46,6 +45,9 @@ impl Preinscription {
                 insert_into(preinscription).values(self).execute(connection)
             })
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to add the preinscription".into()))
     }
 }

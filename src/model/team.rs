@@ -10,10 +10,9 @@ use diesel::{
 
 use uuid::Uuid;
 
-use crate::{
-    database::schema,
-    error::{Error, FlattenErr},
-};
+use exn::ResultExt;
+
+use crate::{database::schema, error::Error};
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone)]
 #[diesel(primary_key(user))]
@@ -82,7 +81,10 @@ impl Team {
                 })
             })
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to create the team".into()))
     }
 
     /// Join an existing team
@@ -113,7 +115,10 @@ impl Team {
                     .execute(connection)
             })
             .await
-            .flatten_err()?
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to join the team".into()))?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::ConstraintViolation,
@@ -144,7 +149,10 @@ impl Team {
         match connection
             .interact(move |connection| diesel::delete(member_of.find(user)).execute(connection))
             .await
-            .flatten_err()?
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to leave the team".into()))?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::NotFound,
@@ -186,7 +194,10 @@ impl Team {
                     .execute(connection)
             })
             .await
-            .flatten_err()?
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to update the team".into()))?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::Unknown,
@@ -234,6 +245,9 @@ impl Team {
                 })
             })
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to get the team summary".into()))
     }
 }

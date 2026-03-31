@@ -12,9 +12,11 @@ use diesel::{
     update,
 };
 
+use exn::ResultExt;
+
 use crate::{
     database::schema::{self, sql_types::AccessibilityType},
-    error::{Error, FlattenErr},
+    error::Error,
 };
 
 #[derive(
@@ -240,7 +242,10 @@ impl Application {
         connection
             .interact(move |connection| insert_into(application).values(self).execute(connection))
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to create the application".into()))
     }
 
     /// Get the application's details
@@ -259,7 +264,10 @@ impl Application {
                     .first(connection)
             })
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to fetch the application".into()))
     }
 
     // Update handled by ApplicationUpdate
@@ -286,7 +294,10 @@ impl Application {
                 .execute(connection)
             })
             .await
-            .flatten_err()?
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to check in the user".into()))?
         {
             0 => Err(exn::Exn::new(Error::database(
                 crate::error::DatabaseError::ConstraintViolation,
@@ -351,6 +362,9 @@ impl ApplicationUpdate {
                     .execute(connection)
             })
             .await
-            .flatten_err()
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to update the application".into()))
     }
 }
