@@ -141,6 +141,8 @@ pub enum Status {
     #[default]
     Applied,
     Accepted,
+    Confirmed,
+    Participating,
     Disqualified,
     Finisher,
     Winner,
@@ -271,7 +273,7 @@ impl Application {
     }
 
     // Update handled by ApplicationUpdate
-    // Delete handled by cascade of user delete
+    // Delete handled by cascade of auth.user delete
 
     /// Check in the user now
     ///
@@ -288,7 +290,7 @@ impl Application {
                     application
                         .filter(id.eq(uid))
                         .filter(check_in.is_null())
-                        .filter(status.eq(Status::Accepted)),
+                        .filter(status.eq(Status::Confirmed)),
                 )
                 .set(check_in.eq(Some(Utc::now())))
                 .execute(connection)

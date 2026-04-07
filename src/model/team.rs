@@ -4,7 +4,7 @@ use diesel::{
     dsl::count,
     insert_into,
     prelude::{Identifiable, Insertable, Queryable},
-    result::Error as DieselError,
+    result::{DatabaseErrorKind as DbErrKind, Error as DieselError},
     update,
 };
 
@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use exn::ResultExt;
 
-use crate::{database::schema, error::Error};
+use crate::{database::schema, error::Error, model::application::Status};
 
 #[derive(Queryable, Insertable, Selectable, Debug, Clone)]
 #[diesel(primary_key(user))]
@@ -94,6 +94,7 @@ impl Team {
     /// or if the team is full.
     /// Might return an error if there's an issue communicating with the database
     pub async fn join(user: Uuid, team: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
+        use schema::application::dsl::{application, status};
         use schema::member_of::dsl::{member_of, team as team_dsl, user as user_dsl};
 
         match connection
@@ -105,6 +106,16 @@ impl Team {
 
                 if count >= 4 {
                     return Err(DieselError::NotFound);
+                }
+
+                match application.find(user).select(status).first(connection)? {
+                    Status::Applied | Status::Accepted | Status::Confirmed => (),
+                    _ => {
+                        return Err(DieselError::DatabaseError(
+                            DbErrKind::CheckViolation,
+                            Box::<String>::new("The user can no longer join a team".into()),
+                        ));
+                    }
                 }
 
                 // Relies on the primary key constraint to ensure that the user isn't already on

@@ -20,14 +20,6 @@ pub mod sql_types {
     pub struct Difficulty;
 
     #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "activity"))]
-    pub struct Activity;
-
-    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
-    #[diesel(postgres_type(name = "meal"))]
-    pub struct Meal;
-
-    #[derive(diesel::query_builder::QueryId, diesel::sql_types::SqlType)]
     #[diesel(postgres_type(name = "status"))]
     pub struct Status;
 
