@@ -1,6 +1,7 @@
 pub mod api;
 pub mod authentication;
 pub mod database;
+pub mod discrimination;
 pub mod error;
 pub mod model;
 pub mod telemetry;

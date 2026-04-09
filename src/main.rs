@@ -28,7 +28,7 @@ async fn main() {
     let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");
 
     let allow_origins: Vec<HeaderValue> = env::var("ALLOW_ORIGIN")
-        .expect("Missing `ALLOW_ORIGIN`")
+        .expect("Missing `ALLOW_ORIGIN` env variable")
         .split(' ')
         .map(|origin| {
             origin
@@ -55,6 +55,12 @@ async fn main() {
         .route("/v0/team/join/{id}", put(api::team::join))
         .route("/v0/team/leave", put(api::team::leave))
         .route("/v0/team/update/{name}", put(api::team::update))
+        .route("/v0/puzzle/{id}", get(api::puzzle::get))
+        .route("/v0/puzzle/all", get(api::puzzle::get_all))
+        .route(
+            "/v0/puzzle/all/by_category",
+            get(api::puzzle::get_all_by_category),
+        )
         .layer(cors_layer)
         .with_state(state);
 

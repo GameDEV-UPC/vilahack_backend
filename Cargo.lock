@@ -133,6 +133,7 @@ dependencies = [
  "dotenvy",
  "exn",
  "fast_qr",
+ "ipnet",
  "jsonwebtoken",
  "opentelemetry",
  "opentelemetry-appender-tracing",

@@ -41,6 +41,7 @@ dotenvy = "0.15"
 # Other
 exn = "0.3"
 fast_qr = { version = "0.13", features = ["image"] }
+ipnet = "2"
 
 [profile.release]
 lto = 'fat' # Perform link time optimizations for the whole dependency graph
