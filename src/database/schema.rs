@@ -64,6 +64,8 @@ diesel::table! {
 diesel::joinable!(member_of -> application (user));
 
 diesel::table! {
+    use diesel::sql_types::Uuid;
+
     member_of (user) {
         user -> Uuid,
         team -> Uuid,
@@ -73,17 +75,53 @@ diesel::table! {
 diesel::joinable!(member_of -> team (team));
 
 diesel::table! {
+    use diesel::sql_types::{Uuid, Nullable, Text, Int4};
+
     team (id) {
         id -> Uuid,
         name -> Text,
-        score -> Integer,
+        score -> Int4,
     }
 }
 
 diesel::allow_tables_to_appear_in_same_query!(application, member_of, team);
 
 diesel::table! {
+    use diesel::sql_types::Text;
+
     preinscription (email) {
         email -> Text,
+    }
+}
+
+diesel::table! {
+    use super::sql_types::{Difficulty};
+    use diesel::sql_types::{Uuid, Nullable, Text, Jsonb, Int2, Bool, Timestamptz};
+
+    puzzle (id) {
+        id -> Uuid,
+        categories -> Jsonb,
+        difficulty -> Difficulty,
+        clues -> Nullable<Jsonb>,
+        points -> Int2,
+        name -> Text,
+        prompt -> Text,
+        start -> Nullable<Timestamptz>,
+        end -> Nullable<Timestamptz>,
+        ommit -> Bool,
+
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::{Uuid, Nullable, Jsonb, Int2, Timestamptz};
+
+    attempt (team, puzzle) {
+        team -> Uuid,
+        puzzle -> Uuid,
+        created_at -> Timestamptz,
+        solved_at -> Nullable<Timestamptz>,
+        clues_used -> Int2,
+        flags -> Nullable<Jsonb>,
     }
 }
