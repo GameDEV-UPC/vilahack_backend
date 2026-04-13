@@ -18,6 +18,7 @@ use exn::ResultExt;
 use crate::{
     database::schema::{self},
     error::Error,
+    model::attempt::Attempt,
 };
 
 #[derive(
@@ -110,7 +111,7 @@ impl ToSql<Jsonb, Pg> for Categories {
     AsExpression,
 )]
 #[diesel(sql_type = Jsonb)]
-pub struct Clues(Vec<String>);
+pub struct Clues(pub Vec<String>);
 
 impl FromSql<Jsonb, Pg> for Clues {
     fn from_sql(bytes: PgValue) -> diesel::deserialize::Result<Self> {
@@ -187,15 +188,41 @@ impl Puzzle {
     /// # Errors
     /// May return an error if there's an issue communicating with the database.
     pub async fn get_all(connection: Connection) -> exn::Result<Vec<Self>, Error> {
-        use schema::puzzle::dsl::puzzle;
+        use schema::puzzle::dsl::{ommit, puzzle};
 
         connection
-            .interact(move |connection| puzzle.select(Self::as_select()).get_results(connection))
+            .interact(move |connection| {
+                puzzle
+                    .select(Self::as_select())
+                    .filter(ommit.eq(false))
+                    .get_results(connection)
+            })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to fetch the puzzle".into()))
+    }
+
+    /// Hides clues that haven't been used by the requesting user's team for the puzzle
+    ///
+    /// # Errors
+    /// May return an error if there's an issue communicating with the database.
+    pub async fn hide_unused_clues(
+        &mut self,
+        user: Uuid,
+        connection: Connection,
+    ) -> exn::Result<(), Error> {
+        let used_count = Attempt::clues_used(user, self.id, connection).await?;
+
+        if let Some(ref mut clues) = self.clues {
+            #[allow(clippy::cast_sign_loss)]
+            for clue in clues.0.iter_mut().skip(used_count as usize) {
+                *clue = String::new();
+            }
+        }
+
+        Ok(())
     }
 
     // TODO solve

@@ -84,7 +84,7 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(application, member_of, team);
+diesel::allow_tables_to_appear_in_same_query!(application, member_of, team, attempt, puzzle);
 
 diesel::table! {
     use diesel::sql_types::Text;
@@ -125,3 +125,6 @@ diesel::table! {
         flags -> Nullable<Jsonb>,
     }
 }
+
+diesel::joinable!(attempt -> puzzle (puzzle));
+diesel::joinable!(attempt -> team (team));
