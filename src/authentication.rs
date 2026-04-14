@@ -83,7 +83,14 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         if let Some(Ok(token)) = parts.headers.get(AUTHORIZATION).map(|v| v.to_str()) {
-            let res = Self::from_token(&token[7..])
+            let Some(token) = token.get(7..) else {
+                return Err(ErrorResponse::from(exn::Exn::new(Error::authentication(
+                    Ae::Missing,
+                    "Missing Authorization token".into(),
+                ))));
+            };
+
+            let res = Self::from_token(token)
                 .or_raise(|| Error::upstream("Failed to create Authenticated from token".into()));
 
             Ok(res?)

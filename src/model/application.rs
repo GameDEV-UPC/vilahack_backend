@@ -229,6 +229,28 @@ pub struct Application {
     pub status: Status,
 }
 
+#[allow(clippy::struct_excessive_bools)]
+#[derive(
+    Queryable,
+    Identifiable,
+    Selectable,
+    Insertable,
+    Debug,
+    Clone,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+#[diesel(primary_key(id))]
+#[diesel(table_name = schema::application)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct ApplicationSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub status: Status,
+}
+
 impl Application {
     /// Insert the the application for the given user
     ///
@@ -264,6 +286,26 @@ impl Application {
                     .find(id)
                     .select(Self::as_select())
                     .first(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to fetch the application".into()))
+    }
+
+    /// Get a summarized list of applications
+    ///
+    /// # Errors
+    /// Might return an error if there's an issue communicating with the database.
+    pub async fn index(connection: Connection) -> exn::Result<Vec<ApplicationSummary>, Error> {
+        use schema::application::dsl::application;
+
+        connection
+            .interact(move |connection| {
+                application
+                    .select(ApplicationSummary::as_select())
+                    .get_results(connection)
             })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno

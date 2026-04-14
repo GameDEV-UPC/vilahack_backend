@@ -17,8 +17,8 @@ use crate::{
     api::{OptionalUid, Uid},
     authentication::{ADMIN_ROLE, Authenticated},
     database::Pool,
-    error::{AuthenticationError, Error, ErrorResponse},
-    model::application::{Application, ApplicationUpdate},
+    error::ErrorResponse,
+    model::application::{Application, ApplicationSummary, ApplicationUpdate},
 };
 
 /// Create the row in the Application table
@@ -81,6 +81,23 @@ pub async fn update(
     Ok(())
 }
 
+/// Get a summarized list of all applications
+///
+/// # Errors
+/// Will return an error if the user is not authenticated as an admin.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/application/index", fields(method = "GET"))]
+pub async fn index(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { role, .. }: Authenticated,
+) -> Result<Json<Vec<ApplicationSummary>>, ErrorResponse> {
+    if role != ADMIN_ROLE {
+        return Err(ErrorResponse::insufficient_permissions());
+    }
+
+    Ok(Json(Application::index(pool.get().await?).await?))
+}
+
 /// Set the check in timestamp for the user
 ///
 /// # Errors
@@ -94,10 +111,7 @@ pub async fn check_in(
     Uid(uid): Uid,
 ) -> Result<(), ErrorResponse> {
     if role != ADMIN_ROLE {
-        return Err(ErrorResponse::from(exn::Exn::new(Error::authentication(
-            AuthenticationError::InsufficientPermissions,
-            "This user is not authorized to do this operation".into(),
-        ))));
+        return Err(ErrorResponse::insufficient_permissions());
     }
 
     Application::check_in(uid, pool.get().await?).await?;

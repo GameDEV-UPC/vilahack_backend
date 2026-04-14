@@ -264,6 +264,15 @@ impl From<DieselErr> for Error {
 #[derive(Debug)]
 pub struct ErrorResponse(Exn<Error>);
 
+impl ErrorResponse {
+    pub fn insufficient_permissions() -> Self {
+        ErrorResponse::from(exn::Exn::new(Error::authentication(
+            AuthenticationError::InsufficientPermissions,
+            "This user is not authorized to do this operation".into(),
+        )))
+    }
+}
+
 impl std::convert::From<exn::Exn<Error>> for ErrorResponse {
     fn from(value: Exn<Error>) -> Self {
         Self(value)
