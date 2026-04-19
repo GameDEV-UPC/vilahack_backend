@@ -61,7 +61,7 @@ async fn main() {
             "/v0/user/attendance/cancel",
             put(api::user::cancel_attendance),
         )
-        .route("/v0/user/check_in", put(api::user::check_in))
+        .route("/v0/user/attendance/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
         .route("/v0/team", get(api::team::summary))
         .route("/v0/team", put(api::team::new))

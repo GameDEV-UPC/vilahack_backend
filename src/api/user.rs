@@ -160,7 +160,11 @@ pub async fn cancel_attendance(
 /// Will return an error if the user hasn't made an application, if they've already checked in or
 /// if they're not accepted. Will also return an error if the caller is not an admin.
 /// Might return an error if there's an issue communicating with the database.
-#[tracing::instrument(skip_all, name = "/v0/user/check_in", fields(method = "PUT"))]
+#[tracing::instrument(
+    skip_all,
+    name = "/v0/user/attendance/check_in",
+    fields(method = "PUT")
+)]
 pub async fn check_in(
     State(pool): State<Arc<Pool>>,
     Authenticated { role, sub }: Authenticated,
