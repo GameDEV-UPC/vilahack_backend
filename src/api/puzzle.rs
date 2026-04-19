@@ -1,12 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use axum::{
-    Json,
-    extract::{Path, State},
-};
-use uuid::Uuid;
+use axum::{Json, extract::State};
 
 use crate::{
+    api::Id,
     authentication::{ADMIN_ROLE, Authenticated},
     database::Pool,
     discrimination::Discriminate,
@@ -20,12 +17,12 @@ use crate::{
 /// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
 /// not on an authorized network.
 /// Might return an error if there's an issue communicating with the database.
-#[tracing::instrument(skip_all, name = "/v0/puzzle/{id}", fields(method = "GET"))]
+#[tracing::instrument(skip_all, name = "/v0/puzzle", fields(method = "GET"))]
 pub async fn get(
     State(pool): State<Arc<Pool>>,
     Authenticated { sub, role }: Authenticated,
     _: Discriminate,
-    Path(id): Path<Uuid>,
+    Id(id): Id,
 ) -> Result<Json<Puzzle>, ErrorResponse> {
     let mut puzzle = Puzzle::get(id, pool.get().await?).await?;
 

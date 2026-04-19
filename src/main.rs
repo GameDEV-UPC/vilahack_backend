@@ -49,14 +49,26 @@ async fn main() {
         .route("/v0/user/application", put(api::user::apply))
         .route("/v0/user/application/update", put(api::user::update))
         .route("/v0/user/application/index", get(api::user::index))
+        .route(
+            "/v0/user/attendance/accept",
+            put(api::user::accept_attendance),
+        )
+        .route(
+            "/v0/user/attendance/confirm",
+            put(api::user::confirm_attendance),
+        )
+        .route(
+            "/v0/user/attendance/cancel",
+            put(api::user::cancel_attendance),
+        )
         .route("/v0/user/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
         .route("/v0/team", get(api::team::summary))
-        .route("/v0/team/{name}", put(api::team::new))
-        .route("/v0/team/join/{id}", put(api::team::join))
+        .route("/v0/team", put(api::team::new))
+        .route("/v0/team/join", put(api::team::join))
         .route("/v0/team/leave", put(api::team::leave))
-        .route("/v0/team/update/{name}", put(api::team::update))
-        .route("/v0/puzzle/{id}", get(api::puzzle::get))
+        .route("/v0/team/update", put(api::team::update))
+        .route("/v0/puzzle", get(api::puzzle::get))
         .route("/v0/puzzle/all", get(api::puzzle::get_all))
         .route(
             "/v0/puzzle/all/by_category",

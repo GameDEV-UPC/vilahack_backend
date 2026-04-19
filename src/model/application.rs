@@ -237,6 +237,7 @@ pub struct Application {
     Insertable,
     Debug,
     Clone,
+    Eq,
     PartialEq,
     serde::Serialize,
     serde::Deserialize,
@@ -316,6 +317,51 @@ impl Application {
 
     // Update handled by ApplicationUpdate
     // Delete handled by cascade of auth.user delete
+
+    /// Change the user's status from `from` to `to`
+    ///
+    /// # Errors
+    /// Will return an error if the given user isn't in the `from` status or if they
+    /// don't have an application in the first place.
+    /// Might return an error if there's an issue communicating with the database
+    pub async fn change_status(
+        uid: Uuid,
+        from: Status,
+        to: Status,
+        connection: Connection,
+    ) -> exn::Result<(), Error> {
+        use schema::application::dsl::{application, id, status};
+
+        match connection
+            .interact(move |connection| {
+                update(application.filter(id.eq(uid)).filter(status.eq(from)))
+                    .set(status.eq(to))
+                    .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to change the user's status".into()))?
+        {
+            0 => Err(exn::Exn::new(Error::database(
+                crate::error::DatabaseError::ConstraintViolation,
+                "The user doesn't exist, they're already on the target state or they're not in the required state".into(),
+            ))),
+            1 => Ok(()),
+            n => {
+                tracing::warn!("{n} rows were updated when trying change the user's status.");
+
+                Err(exn::Exn::new(Error::database(
+                    crate::error::DatabaseError::Unknown,
+                    format!(
+                        "Something went horribly wrong when trying to change user's {uid} state at {}. Please contact an administrator as soon as possible",
+                        Utc::now()
+                    ),
+                )))
+            }
+        }
+    }
 
     /// Check in the user now
     ///

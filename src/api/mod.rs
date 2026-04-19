@@ -8,73 +8,81 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
+use uuid::Uuid;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct UidQuery {
-    id: Option<uuid::Uuid>,
-    qr: Option<String>,
+    id: Option<String>,
 }
 
-pub struct Uid(uuid::Uuid);
-pub struct OptionalUid(Option<uuid::Uuid>);
+pub struct Id(uuid::Uuid);
+pub struct OptionalId(Option<uuid::Uuid>);
 
-impl<S> FromRequestParts<S> for OptionalUid
+impl<S> FromRequestParts<S> for Id
 where
     S: Send + Sync,
 {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let query = Query::<UidQuery>::from_request_parts(parts, state)
-            .await
-            .unwrap();
+        let Ok(query) = Query::<UidQuery>::from_request_parts(parts, state).await else {
+            return Err((StatusCode::BAD_REQUEST, "id query missing"));
+        };
 
-        if let Some(id) = query.id {
-            Ok(Self(Some(id)))
-        } else if let Some(encoded) = &query.qr {
-            let mut decoded: [u8; 16] = [0; 16];
-            if BASE64_STANDARD_NO_PAD
-                .decode_slice(encoded, &mut decoded)
-                .is_err()
-            {
-                Err((StatusCode::BAD_REQUEST, "qr could not be decoded"))
-            } else {
-                Ok(Self(Some(uuid::Uuid::from_bytes(decoded))))
-            }
-        } else {
-            Ok(Self(None))
-        }
+        let Some(ref query_id) = query.id else {
+            return Err((StatusCode::BAD_REQUEST, "id query missing"));
+        };
+
+        Uuid::try_parse(query_id).map_or_else(
+            |_| {
+                let mut decoded: [u8; 16] = [0; 16];
+                if BASE64_STANDARD_NO_PAD
+                    .decode_slice(query_id, &mut decoded)
+                    .is_err()
+                {
+                    Err((StatusCode::BAD_REQUEST, "id could not be decoded"))
+                } else {
+                    Ok(Self(uuid::Uuid::from_bytes(decoded)))
+                }
+            },
+            |uuid| Ok(Self(uuid)),
+        )
     }
 }
 
-impl<S> FromRequestParts<S> for Uid
+impl<S> FromRequestParts<S> for OptionalId
 where
     S: Send + Sync,
 {
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let query = Query::<UidQuery>::from_request_parts(parts, state)
-            .await
-            .unwrap();
+        let Ok(query) = Query::<UidQuery>::from_request_parts(parts, state).await else {
+            return Ok(Self(None));
+        };
 
-        if let Some(id) = query.id {
-            Ok(Self(id))
-        } else if let Some(encoded) = &query.qr {
-            let mut decoded: [u8; 16] = [0; 16];
-            if BASE64_STANDARD_NO_PAD
-                .decode_slice(encoded, &mut decoded)
-                .is_err()
-            {
-                Err((StatusCode::BAD_REQUEST, "qr could not be decoded"))
-            } else {
-                Ok(Self(uuid::Uuid::from_bytes(decoded)))
-            }
-        } else {
-            Err((
-                StatusCode::BAD_REQUEST,
-                "Either id or qr queries are required",
-            ))
-        }
+        let Some(ref query_id) = query.id else {
+            return Ok(Self(None));
+        };
+
+        Uuid::try_parse(query_id).map_or_else(
+            |_| {
+                let mut decoded: [u8; 16] = [0; 16];
+                if BASE64_STANDARD_NO_PAD
+                    .decode_slice(query_id, &mut decoded)
+                    .is_err()
+                {
+                    Err((StatusCode::BAD_REQUEST, "id could not be decoded"))
+                } else {
+                    Ok(Self(Some(uuid::Uuid::from_bytes(decoded))))
+                }
+            },
+            |uuid| Ok(Self(Some(uuid))),
+        )
     }
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct Name {
+    name: String,
 }

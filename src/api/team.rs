@@ -2,12 +2,13 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Query, State},
 };
 
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 
 use crate::{
+    api::{Id, Name},
     authentication::Authenticated,
     database::Pool,
     error::ErrorResponse,
@@ -37,9 +38,9 @@ pub async fn summary(
 pub async fn new(
     State(pool): State<Arc<Pool>>,
     Authenticated { sub, .. }: Authenticated,
-    Path(name): Path<String>,
+    Query(name): Query<Name>,
 ) -> Result<Json<String>, ErrorResponse> {
-    let team = Team::new(name, sub, pool.get().await?).await?;
+    let team = Team::new(name.name, sub, pool.get().await?).await?;
 
     Ok(Json(BASE64_STANDARD_NO_PAD.encode(team.id.as_bytes())))
 }
@@ -55,17 +56,8 @@ pub async fn new(
 pub async fn join(
     State(pool): State<Arc<Pool>>,
     Authenticated { sub, .. }: Authenticated,
-    Path(id): Path<String>,
+    Id(id): Id,
 ) -> Result<Json<TeamSummary>, ErrorResponse> {
-    let mut decoded: [u8; 16] = [0; 16];
-    if BASE64_STANDARD_NO_PAD
-        .decode_slice(id, &mut decoded)
-        .is_err()
-    {
-        decoded = [0; 16]; // Make a nil uuid if it fails to decode
-    }
-
-    let id = uuid::Uuid::from_bytes(decoded);
     Team::join(sub, id, pool.get().await?).await?;
 
     Ok(Json(Team::summary(sub, pool.get().await?).await?))
@@ -93,7 +85,7 @@ pub async fn leave(
 pub async fn update(
     State(pool): State<Arc<Pool>>,
     Authenticated { sub, .. }: Authenticated,
-    Path(name): Path<String>,
+    Query(name): Query<Name>,
 ) -> Result<(), ErrorResponse> {
-    Ok(Team::update(sub, name, pool.get().await?).await?)
+    Ok(Team::update(sub, name.name, pool.get().await?).await?)
 }

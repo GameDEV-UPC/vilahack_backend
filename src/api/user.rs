@@ -14,11 +14,11 @@ use fast_qr::{
 };
 
 use crate::{
-    api::{OptionalUid, Uid},
+    api::{Id, OptionalId},
     authentication::{ADMIN_ROLE, Authenticated},
     database::Pool,
     error::ErrorResponse,
-    model::application::{Application, ApplicationSummary, ApplicationUpdate},
+    model::application::{Application, ApplicationSummary, ApplicationUpdate, Status},
 };
 
 /// Create the row in the Application table
@@ -39,8 +39,8 @@ pub async fn apply(
 
 /// Returns the user's application
 ///
-/// If the caller is an admin and they provided a uid on the query,
-/// the data of the user with that uid will be returned. Otherwise, the data of the caller's JWT
+/// If the caller is an admin and they provided an id on the query,
+/// the data of the user with that id will be returned. Otherwise, the data of the caller's JWT
 /// subject will be returned.
 ///
 /// # Errors
@@ -51,19 +51,19 @@ pub async fn apply(
 pub async fn get(
     State(pool): State<Arc<Pool>>,
     Authenticated { sub, role }: Authenticated,
-    OptionalUid(uid): OptionalUid,
+    OptionalId(id): OptionalId,
 ) -> Result<Json<Application>, ErrorResponse> {
-    // If the caller is an admin and they've provided a uid, use that uid. Otherwise use the
+    // If the caller is an admin and they've provided an id, use that id. Otherwise use the
     // JWT's subject
-    let uid = match (role == ADMIN_ROLE, uid) {
-        (true, Some(uid)) => {
-            tracing::info!(target: "privacy", organizer = sub.to_string(), participant = uid.to_string());
-            uid
+    let id = match (role == ADMIN_ROLE, id) {
+        (true, Some(id)) => {
+            tracing::info!(target: "privacy", organizer = sub.to_string(), participant = id.to_string());
+            id
         }
         _ => sub,
     };
 
-    Ok(Json(Application::get(uid, pool.get().await?).await?))
+    Ok(Json(Application::get(id, pool.get().await?).await?))
 }
 
 /// Updates the user's application
@@ -98,25 +98,81 @@ pub async fn index(
     Ok(Json(Application::index(pool.get().await?).await?))
 }
 
+/// Change the application status from `applied` to `accepted`
+///
+/// # Errors
+/// Will return an erro if the user doesn't have an application on the `applied` state and if the
+/// caller is not an authenticated admin
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/attendance/accept", fields(method = "PUT"))]
+pub async fn accept_attendance(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { role, .. }: Authenticated,
+    Id(id): Id,
+) -> Result<(), ErrorResponse> {
+    if role != ADMIN_ROLE {
+        return Err(ErrorResponse::insufficient_permissions());
+    }
+
+    Application::change_status(id, Status::Applied, Status::Accepted, pool.get().await?).await?;
+
+    Ok(())
+}
+
+/// Change the application status from `accepted` to `confirmed`
+///
+/// # Errors
+/// Will return an error if the user hasn't made an application or if they're not in the `accepted`
+/// state. Will return an error if the caller is not authenticated.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/attendance/confirm", fields(method = "PUT"))]
+pub async fn confirm_attendance(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { sub, .. }: Authenticated,
+) -> Result<(), ErrorResponse> {
+    Application::change_status(sub, Status::Accepted, Status::Confirmed, pool.get().await?).await?;
+
+    Ok(())
+}
+
+/// Change the application status from `confirmed` to `accepted`
+///
+/// Users that are checked in can technically change their attendance commitment,
+/// but I don't think that's an issue really.
+///
+/// # Errors
+/// Will return an error if the user hasn't made an application, if they're not in the `confirmed`
+/// state or if they're unauthenticated.
+/// Might return an error if there's an issue communicating with the database.
+#[tracing::instrument(skip_all, name = "/v0/user/attendance/cancel", fields(method = "PUT"))]
+pub async fn cancel_attendance(
+    State(pool): State<Arc<Pool>>,
+    Authenticated { sub, .. }: Authenticated,
+) -> Result<(), ErrorResponse> {
+    Application::change_status(sub, Status::Confirmed, Status::Accepted, pool.get().await?).await?;
+
+    Ok(())
+}
+
 /// Set the check in timestamp for the user
 ///
 /// # Errors
-/// Will return an error if the user hasn't made an applicationm if they've already checked in or
+/// Will return an error if the user hasn't made an application, if they've already checked in or
 /// if they're not accepted. Will also return an error if the caller is not an admin.
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/check_in", fields(method = "PUT"))]
 pub async fn check_in(
     State(pool): State<Arc<Pool>>,
     Authenticated { role, sub }: Authenticated,
-    Uid(uid): Uid,
+    Id(id): Id,
 ) -> Result<(), ErrorResponse> {
     if role != ADMIN_ROLE {
         return Err(ErrorResponse::insufficient_permissions());
     }
 
-    Application::check_in(uid, pool.get().await?).await?;
+    Application::check_in(id, pool.get().await?).await?;
 
-    tracing::info!(target: "check_in", organizer = sub.to_string(), participant = uid.to_string());
+    tracing::info!(target: "check_in", organizer = sub.to_string(), participant = id.to_string());
 
     Ok(())
 }

@@ -265,8 +265,9 @@ impl From<DieselErr> for Error {
 pub struct ErrorResponse(Exn<Error>);
 
 impl ErrorResponse {
+    #[must_use]
     pub fn insufficient_permissions() -> Self {
-        ErrorResponse::from(exn::Exn::new(Error::authentication(
+        Self(exn::Exn::new(Error::authentication(
             AuthenticationError::InsufficientPermissions,
             "This user is not authorized to do this operation".into(),
         )))
