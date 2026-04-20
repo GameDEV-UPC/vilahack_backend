@@ -26,10 +26,8 @@ pub struct Preinscription {
 
 impl Preinscription {
     #[must_use]
-    pub fn new(email: &serde_email::Email) -> Self {
-        Self {
-            email: email.to_string(),
-        }
+    pub const fn new(email: String) -> Self {
+        Self { email }
     }
 
     /// Insert a new email into the preinscriptions table

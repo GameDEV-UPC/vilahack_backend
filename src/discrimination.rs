@@ -1,20 +1,11 @@
-use std::{env, net::IpAddr, sync::LazyLock};
+use std::net::IpAddr;
 
 use axum::{extract::FromRequestParts, http::request::Parts};
-use ipnet::IpNet;
 
-use crate::error::{AuthenticationError as Ae, Error, ErrorResponse};
-
-static ALLOWED_RANGES: LazyLock<Vec<IpNet>> = LazyLock::new(|| {
-    dotenvy::dotenv().ok();
-    _ = &env::var("ALLOWED_RANGES").expect("Missing ALLOWED_RANGES env variable");
-
-    env::var("ALLOWED_RANGES")
-        .expect("Missing `ALLOWED_RANGES` env variable")
-        .split(' ')
-        .map(|range| range.parse().expect("Failed to parse `ALLOWED_RANGES`"))
-        .collect()
-});
+use crate::{
+    config::CONFIG,
+    error::{AuthenticationError as Ae, Error, ErrorResponse},
+};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Discriminate;
@@ -39,7 +30,11 @@ where
                     ))
                 },
                 |ip| {
-                    if ALLOWED_RANGES.iter().any(|range| range.contains(&ip)) {
+                    if CONFIG
+                        .allowed_ranges
+                        .iter()
+                        .any(|range| range.contains(&ip))
+                    {
                         Ok(Self)
                     } else {
                         exn::bail!(Error::authentication(

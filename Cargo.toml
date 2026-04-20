@@ -23,7 +23,6 @@ serde_json = "1"
 base64 = "0.22"
 bitflags = { version = "2", features = ["serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-serde-email = "3.2"
 uuid = { version = "1", features = ["serde", "rng", "v4"] }
 
 # Observability
@@ -35,13 +34,11 @@ opentelemetry_sdk = "0.31"
 opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"] }
 opentelemetry-appender-tracing = { version = "0.31", features = ["tracing-opentelemetry"] }
 
-# Env access
-dotenvy = "0.15"
-
 # Other
 exn = "0.3"
 fast_qr = { version = "0.13", features = ["image"] }
-ipnet = "2"
+ipnet = { version = "2", features = ["serde"] }
+toml = "1.1.2"
 
 [profile.release]
 lto = 'fat' # Perform link time optimizations for the whole dependency graph

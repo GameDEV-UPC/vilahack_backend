@@ -12,6 +12,8 @@ use opentelemetry_sdk::{
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::config::CONFIG;
+
 fn resource(deployment: String) -> Resource {
     Resource::builder()
         .with_service_name(env!("CARGO_PKG_NAME"))
@@ -76,16 +78,16 @@ fn init_logger_provider(deployment: String) -> SdkLoggerProvider {
 }
 
 #[must_use]
-pub fn init_tracing_subscriber(deployment: String, level: tracing::Level) -> OtelGuard {
-    let tracer_provider = init_tracer_provider(deployment.clone());
-    let meter_provider = init_meter_provider(deployment.clone());
-    let logger_provider = init_logger_provider(deployment);
+pub fn init_tracing_subscriber() -> OtelGuard {
+    let tracer_provider = init_tracer_provider(CONFIG.deployment.clone());
+    let meter_provider = init_meter_provider(CONFIG.deployment.clone());
+    let logger_provider = init_logger_provider(CONFIG.deployment.clone());
 
     let tracer = tracer_provider.tracer("vilahack_backend");
     let log_layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
     tracing_subscriber::registry()
-        .with(tracing_subscriber::filter::LevelFilter::from_level(level))
+        .with(CONFIG.trace_level)
         .with(tracing_subscriber::fmt::layer())
         .with(MetricsLayer::new(meter_provider.clone()))
         .with(OpenTelemetryLayer::new(tracer))

@@ -15,7 +15,8 @@ use fast_qr::{
 
 use crate::{
     api::{Id, OptionalId},
-    authentication::{ADMIN_ROLE, Authenticated},
+    authentication::Authenticated,
+    config::CONFIG,
     database::Pool,
     error::ErrorResponse,
     model::application::{Application, ApplicationSummary, ApplicationUpdate, Status},
@@ -55,7 +56,7 @@ pub async fn get(
 ) -> Result<Json<Application>, ErrorResponse> {
     // If the caller is an admin and they've provided an id, use that id. Otherwise use the
     // JWT's subject
-    let id = match (role == ADMIN_ROLE, id) {
+    let id = match (role == CONFIG.jwk.admin_role, id) {
         (true, Some(id)) => {
             tracing::info!(target: "privacy", organizer = sub.to_string(), participant = id.to_string());
             id
@@ -91,7 +92,7 @@ pub async fn index(
     State(pool): State<Arc<Pool>>,
     Authenticated { role, .. }: Authenticated,
 ) -> Result<Json<Vec<ApplicationSummary>>, ErrorResponse> {
-    if role != ADMIN_ROLE {
+    if role != CONFIG.jwk.admin_role {
         return Err(ErrorResponse::insufficient_permissions());
     }
 
@@ -110,7 +111,7 @@ pub async fn accept_attendance(
     Authenticated { role, .. }: Authenticated,
     Id(id): Id,
 ) -> Result<(), ErrorResponse> {
-    if role != ADMIN_ROLE {
+    if role != CONFIG.jwk.admin_role {
         return Err(ErrorResponse::insufficient_permissions());
     }
 
@@ -170,7 +171,7 @@ pub async fn check_in(
     Authenticated { role, sub }: Authenticated,
     Id(id): Id,
 ) -> Result<(), ErrorResponse> {
-    if role != ADMIN_ROLE {
+    if role != CONFIG.jwk.admin_role {
         return Err(ErrorResponse::insufficient_permissions());
     }
 

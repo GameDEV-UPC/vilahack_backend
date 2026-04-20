@@ -1,48 +1,32 @@
-use std::{env, str::FromStr, sync::Arc};
+use std::sync::Arc;
 
 use axum::{
     Router,
     http::{
-        HeaderValue, Method,
+        Method,
         header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     },
     routing::{get, put},
 };
 use tower_http::cors::CorsLayer;
 
-use backend::{api, database, telemetry::init_tracing_subscriber};
-use tracing::Level;
+use backend::{api, config::CONFIG, database, telemetry::init_tracing_subscriber};
 
 #[tracing::instrument]
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok(); // Load .env file as env variables
-    let deployment = env::var("DEPLOYMENT").expect("Missing `DEPLOYMENT` env variable");
-    let log_level =
-        Level::from_str(&env::var("RUST_LOG").expect("Missing `TRACER_NAME` env variable"))
-            .expect("Could not parce `RUST_LOG` env variable");
-
-    let _guard = init_tracing_subscriber(deployment, log_level);
-
-    let bind = env::var("BIND_ADDRESS").expect("Missing server's `BIND_ADDRESS` env variable");
-    let database_url = env::var("DATABASE_URL").expect("Missing `DATABASE_URL` env variable");
-
-    let allow_origins: Vec<HeaderValue> = env::var("ALLOW_ORIGIN")
-        .expect("Missing `ALLOW_ORIGIN` env variable")
-        .split(' ')
-        .map(|origin| {
-            origin
-                .parse::<HeaderValue>()
-                .expect("Failed to parse `ALLOW_ORIGIN`")
-        })
-        .collect();
+    let _guard = init_tracing_subscriber();
 
     let cors_layer = CorsLayer::new()
-        .allow_origin(allow_origins)
+        .allow_origin(CONFIG.allowed_origins.clone())
         .allow_methods([Method::GET, Method::PUT])
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
-    let state = Arc::new(database::Pool::from_url(&database_url).await.unwrap());
+    let state = Arc::new(
+        database::Pool::from_url(&CONFIG.database_url)
+            .await
+            .unwrap(),
+    );
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
         .route("/v0/user/application", get(api::user::get))
@@ -77,7 +61,9 @@ async fn main() {
         .layer(cors_layer)
         .with_state(state);
 
-    tracing::info!("Starting server at {bind}...");
-    let listener = tokio::net::TcpListener::bind(bind).await.unwrap();
+    tracing::info!("Starting server at {}...", CONFIG.bind_address);
+    let listener = tokio::net::TcpListener::bind(CONFIG.bind_address)
+        .await
+        .unwrap();
     axum::serve(listener, router).await.unwrap();
 }

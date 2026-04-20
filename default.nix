@@ -1,16 +1,21 @@
 { rustPlatform
-, postgresql   
+, postgresql
 , pkgconf
 , openssl
 }:
 
-rustPlatform.buildRustPackage {
-  pname = "backend";
+let
+  package_name = "vilahack_backend";
   version = "0.5.0";
+in
+  rustPlatform.buildRustPackage {
+    name = package_name;
+    pname = package_name;
+    version = version;
 
-  src = ./.;
+    src = ./.;
 
-  nativeBuildInputs = [ pkgconf ];
-  buildInputs = [ postgresql openssl ];
-  cargoLock.lockFile = ./Cargo.lock;
-}
+    nativeBuildInputs = [ pkgconf ];
+    buildInputs = [ postgresql openssl ];
+    cargoLock.lockFile = ./Cargo.lock;
+  }

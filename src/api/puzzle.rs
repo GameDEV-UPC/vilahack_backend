@@ -4,7 +4,8 @@ use axum::{Json, extract::State};
 
 use crate::{
     api::Id,
-    authentication::{ADMIN_ROLE, Authenticated},
+    authentication::Authenticated,
+    config::CONFIG,
     database::Pool,
     discrimination::Discriminate,
     error::ErrorResponse,
@@ -26,7 +27,7 @@ pub async fn get(
 ) -> Result<Json<Puzzle>, ErrorResponse> {
     let mut puzzle = Puzzle::get(id, pool.get().await?).await?;
 
-    if role != ADMIN_ROLE {
+    if role != CONFIG.jwk.admin_role {
         puzzle.hide_unused_clues(sub, pool.get().await?).await?;
     }
 
@@ -46,7 +47,7 @@ pub async fn get_all(
 ) -> Result<Json<Vec<Puzzle>>, ErrorResponse> {
     let mut puzzles = Puzzle::get_all(pool.get().await?).await?;
 
-    if role == ADMIN_ROLE {
+    if role == CONFIG.jwk.admin_role {
         return Ok(Json(puzzles));
     }
 
@@ -74,7 +75,7 @@ pub async fn get_all_by_category(
 
     // This could be parallelized. For now, there aren't enough puzzles to warrant the effort.
     for puzzle in &mut puzzles {
-        if role != ADMIN_ROLE {
+        if role != CONFIG.jwk.admin_role {
             puzzle.hide_unused_clues(sub, pool.get().await?).await?;
         }
 

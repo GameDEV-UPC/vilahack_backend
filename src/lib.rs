@@ -1,5 +1,6 @@
 pub mod api;
 pub mod authentication;
+pub mod config;
 pub mod database;
 pub mod discrimination;
 pub mod error;

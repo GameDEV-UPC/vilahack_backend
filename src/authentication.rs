@@ -1,27 +1,14 @@
-use std::{env, sync::LazyLock};
-
 use axum::{
     extract::FromRequestParts,
     http::{header::AUTHORIZATION, request::Parts},
 };
-use jsonwebtoken::{DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
+use jsonwebtoken::{DecodingKey, Validation, decode, decode_header};
 
-use crate::error::{AuthenticationError as Ae, Error, ErrorResponse};
+use crate::{
+    config::CONFIG,
+    error::{AuthenticationError as Ae, Error, ErrorResponse},
+};
 use exn::{ResultExt, bail};
-
-static JWKSET: LazyLock<JwkSet> = LazyLock::new(|| {
-    dotenvy::dotenv().ok();
-    serde_json::from_str(&env::var("JWKS").expect("Missing JWKS env variable"))
-        .expect("Failed to deserialze JWK set from JWKS env variable")
-});
-
-static ISSUER: LazyLock<String> = LazyLock::new(|| {
-    dotenvy::dotenv().ok();
-    env::var("ISSUER").expect("Missing ISSUER env variable")
-});
-
-const AUTHENTICATED_AUDIENCE: [&str; 1] = ["authenticated"];
-pub const ADMIN_ROLE: &str = "admin";
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Authenticated {
@@ -38,7 +25,6 @@ impl Authenticated {
     /// # Errors
     /// Returns an error if the token could not be parsed or validated
     pub fn from_token(token: &str) -> exn::Result<Self, Error> {
-        let jwkset: &JwkSet = &JWKSET;
         let header = decode_header(token)
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Could not decode token".into()))?;
@@ -50,7 +36,7 @@ impl Authenticated {
             ));
         };
 
-        let Some(jwk) = jwkset.find(&kid) else {
+        let Some(jwk) = CONFIG.jwk.set.find(&kid) else {
             bail!(Error::authentication(
                 Ae::NoMatchingKey,
                 "No matching jwk found for the kiven kid. Your JWT might be outdated or the issuer might have outdated keys.".into(),
@@ -59,8 +45,8 @@ impl Authenticated {
 
         let validation = {
             let mut validation = Validation::new(header.alg);
-            validation.set_audience(&AUTHENTICATED_AUDIENCE);
-            validation.set_issuer(&[&*ISSUER]);
+            validation.set_audience(&CONFIG.jwk.authenticated_audiences);
+            validation.set_issuer(&CONFIG.jwk.issuers);
             validation
         };
 
