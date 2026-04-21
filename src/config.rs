@@ -1,4 +1,4 @@
-use std::{fs, net::SocketAddr, sync::LazyLock};
+use std::{fs, net::SocketAddr, path::PathBuf, sync::LazyLock};
 
 use axum::http::HeaderValue;
 use ipnet::IpNet;
@@ -77,10 +77,20 @@ pub struct Jwk {
 }
 
 pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
-    let contents = match fs::read_to_string("/etc/vilahack_backend/config.toml") {
+    let config_path = std::env::args().nth(1).map_or_else(
+        || {
+            tracing::info!(
+                "Config path not provided, using default: /etc/vilahack_backend/config.toml"
+            );
+            PathBuf::from("/etc/vilahack_backend/config.toml")
+        },
+        PathBuf::from,
+    );
+
+    let contents = match fs::read_to_string(&config_path) {
         Ok(contents) => contents,
         Err(err) => {
-            eprintln!("Could not read the config file at /etc/vilahack_backend/config.toml: {err}");
+            tracing::error!("Could not read the config file at {config_path:?}: {err}");
             panic!();
         }
     };
@@ -88,7 +98,7 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     match toml::from_str(&contents) {
         Ok(configuration) => configuration,
         Err(err) => {
-            eprintln!("Could not parse config.toml: {err}");
+            tracing::error!("Could not parse config.toml: {err}");
             panic!();
         }
     }
