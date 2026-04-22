@@ -18,6 +18,7 @@ pub struct Error {
 pub enum Source {
     Authentication(AuthenticationError),
     Database(DatabaseError),
+    Puzzle(PuzzleError),
     Internal,
 }
 
@@ -52,6 +53,15 @@ pub enum DatabaseError {
     Unknown,
 }
 
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PuzzleError {
+    Io,
+    Generator,
+    FilesMissing,
+    NotFound,
+}
+
 impl Error {
     #[must_use]
     pub const fn authentication(reason: AuthenticationError, message: String) -> Self {
@@ -65,6 +75,14 @@ impl Error {
     pub const fn database(reason: DatabaseError, message: String) -> Self {
         Self {
             error_type: Source::Database(reason),
+            message,
+        }
+    }
+
+    #[must_use]
+    pub const fn puzzle(reason: PuzzleError, message: String) -> Self {
+        Self {
+            error_type: Source::Puzzle(reason),
             message,
         }
     }
@@ -310,6 +328,12 @@ impl IntoResponse for ErrorResponse {
             }
             Source::Database(DatabaseError::NotFound) => StatusCode::NOT_FOUND,
             Source::Database(DatabaseError::ConstraintViolation) => StatusCode::PRECONDITION_FAILED,
+
+            // Puzzle errors
+            Source::Puzzle(PuzzleError::NotFound) => StatusCode::NOT_FOUND,
+            Source::Puzzle(
+                PuzzleError::FilesMissing | PuzzleError::Io | PuzzleError::Generator,
+            ) => StatusCode::INTERNAL_SERVER_ERROR,
 
             // Anything else
             _ => {

@@ -14,10 +14,10 @@ use fast_qr::{
 };
 
 use crate::{
+    State as Bstate,
     api::{Id, OptionalId},
     authentication::Authenticated,
     config::CONFIG,
-    database::Pool,
     error::ErrorResponse,
     model::application::{Application, ApplicationSummary, ApplicationUpdate, Status},
 };
@@ -30,11 +30,13 @@ use crate::{
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/application", fields(method = "PUT"))]
 pub async fn apply(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { sub, .. }: Authenticated,
     Json(application): Json<Application>,
 ) -> Result<StatusCode, ErrorResponse> {
-    _ = application.create(sub, pool.get().await?).await?;
+    _ = application
+        .create(sub, state.get_connection().await?)
+        .await?;
     Ok(StatusCode::OK)
 }
 
@@ -50,7 +52,7 @@ pub async fn apply(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/application", fields(method = "GET"))]
 pub async fn get(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { sub, role }: Authenticated,
     OptionalId(id): OptionalId,
 ) -> Result<Json<Application>, ErrorResponse> {
@@ -64,7 +66,9 @@ pub async fn get(
         _ => sub,
     };
 
-    Ok(Json(Application::get(id, pool.get().await?).await?))
+    Ok(Json(
+        Application::get(id, state.get_connection().await?).await?,
+    ))
 }
 
 /// Updates the user's application
@@ -74,11 +78,11 @@ pub async fn get(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/application/update", fields(method = "PUT"))]
 pub async fn update(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { sub, .. }: Authenticated,
     Json(updated): Json<ApplicationUpdate>,
 ) -> Result<(), ErrorResponse> {
-    let _ = updated.update(sub, pool.get().await?).await?;
+    let _ = updated.update(sub, state.get_connection().await?).await?;
     Ok(())
 }
 
@@ -89,14 +93,16 @@ pub async fn update(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/application/index", fields(method = "GET"))]
 pub async fn index(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { role, .. }: Authenticated,
 ) -> Result<Json<Vec<ApplicationSummary>>, ErrorResponse> {
     if role != CONFIG.jwk.admin_role {
         return Err(ErrorResponse::insufficient_permissions());
     }
 
-    Ok(Json(Application::index(pool.get().await?).await?))
+    Ok(Json(
+        Application::index(state.get_connection().await?).await?,
+    ))
 }
 
 /// Change the application status from `applied` to `accepted`
@@ -107,7 +113,7 @@ pub async fn index(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/attendance/accept", fields(method = "PUT"))]
 pub async fn accept_attendance(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { role, .. }: Authenticated,
     Id(id): Id,
 ) -> Result<(), ErrorResponse> {
@@ -115,7 +121,13 @@ pub async fn accept_attendance(
         return Err(ErrorResponse::insufficient_permissions());
     }
 
-    Application::change_status(id, Status::Applied, Status::Accepted, pool.get().await?).await?;
+    Application::change_status(
+        id,
+        vec![Status::Applied],
+        Status::Accepted,
+        state.get_connection().await?,
+    )
+    .await?;
 
     Ok(())
 }
@@ -128,10 +140,16 @@ pub async fn accept_attendance(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/attendance/confirm", fields(method = "PUT"))]
 pub async fn confirm_attendance(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { sub, .. }: Authenticated,
 ) -> Result<(), ErrorResponse> {
-    Application::change_status(sub, Status::Accepted, Status::Confirmed, pool.get().await?).await?;
+    Application::change_status(
+        sub,
+        vec![Status::Accepted],
+        Status::Confirmed,
+        state.get_connection().await?,
+    )
+    .await?;
 
     Ok(())
 }
@@ -147,10 +165,16 @@ pub async fn confirm_attendance(
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/user/attendance/cancel", fields(method = "PUT"))]
 pub async fn cancel_attendance(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { sub, .. }: Authenticated,
 ) -> Result<(), ErrorResponse> {
-    Application::change_status(sub, Status::Confirmed, Status::Accepted, pool.get().await?).await?;
+    Application::change_status(
+        sub,
+        vec![Status::Confirmed, Status::Accepted],
+        Status::Cancelled,
+        state.get_connection().await?,
+    )
+    .await?;
 
     Ok(())
 }
@@ -167,7 +191,7 @@ pub async fn cancel_attendance(
     fields(method = "PUT")
 )]
 pub async fn check_in(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Authenticated { role, sub }: Authenticated,
     Id(id): Id,
 ) -> Result<(), ErrorResponse> {
@@ -175,7 +199,7 @@ pub async fn check_in(
         return Err(ErrorResponse::insufficient_permissions());
     }
 
-    Application::check_in(id, pool.get().await?).await?;
+    Application::check_in(id, state.get_connection().await?).await?;
 
     tracing::info!(target: "check_in", organizer = sub.to_string(), participant = id.to_string());
 

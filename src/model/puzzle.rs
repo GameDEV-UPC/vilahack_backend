@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{io::Write, path::PathBuf, process::Command};
 
 use chrono::{DateTime, Utc};
 use deadpool_diesel::postgres::Connection;
@@ -16,10 +16,32 @@ use diesel::{
 use exn::ResultExt;
 
 use crate::{
+    config::CONFIG,
     database::schema::{self},
-    error::Error,
+    error::{Error, PuzzleError},
     model::attempt::Attempt,
 };
+
+fn find_output(directory: PathBuf) -> exn::Result<PathBuf, Error> {
+    let directory_contents = match std::fs::read_dir(directory) {
+        Ok(contents) => Ok(contents),
+        Err(err) => Err(Error::puzzle(PuzzleError::Io, err.to_string())),
+    };
+
+    for element in directory_contents?.filter_map(|e| e.ok()) {
+        if element.path().is_file()
+            && let Some(extension) = element.path().extension()
+            && extension == "gz"
+        {
+            return Ok(element.path());
+        }
+    }
+
+    Err(exn::Exn::new(Error::puzzle(
+        PuzzleError::FilesMissing,
+        "Could not find an output .tar.gz".into(),
+    )))
+}
 
 #[derive(
     diesel_derive_enum::DbEnum,
@@ -225,6 +247,62 @@ impl Puzzle {
         Ok(())
     }
 
+    fn generate(team: Uuid, path: PathBuf) -> exn::Result<(), Error> {
+        let Ok(status) = Command::new("nix develop --command bash generate.sh")
+            .arg(team.to_string())
+            .current_dir(path)
+            .status()
+        else {
+            return Err(exn::Exn::new(Error::puzzle(
+                PuzzleError::Generator,
+                "Could not run generator".into(),
+            )));
+        };
+
+        if !status.success() {
+            return Err(exn::Exn::new(Error::puzzle(
+                PuzzleError::Generator,
+                "Generator exited with an error code".into(),
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Returns the path to the puzzle's generated archive for the team.
+    ///
+    /// It is important for only one instance of this function for any (`team`, `puzzle`) pair to
+    /// run in any instant. This is because if it were to happen, the same generator could run
+    /// several times in parallel, causing issues. It could also happen that this function thinks a
+    /// generator is done because it found the output directory but the generator has not yet found
+    /// the output archive.
+    ///
+    /// Maybe this could be made robust with some kind of lockfile mechanic. But it would require
+    /// considering.
+    ///
+    /// # Errors
+    /// Returns an error if the puzzle doesn't exist, if there's an issue reading the disk, if
+    /// there's an issue running the generator or if the generator exits with an error code.
+    pub async fn files(puzzle: Uuid, team: Uuid) -> exn::Result<PathBuf, Error> {
+        let puzzle_path = {
+            let mut path = CONFIG.puzzle_directory.clone();
+            path.push(puzzle.to_string());
+            path
+        };
+
+        let output_path = {
+            let mut path = puzzle_path.clone();
+            path.push("out");
+            path.push(team.to_string());
+            path
+        };
+        
+        if !output_path.is_dir() {
+            Self::generate(team, puzzle_path)?;
+        }
+
+        find_output(output_path)
+    }
+
     // TODO solve
-    // TODO files
 }

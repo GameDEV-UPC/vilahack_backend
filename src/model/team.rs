@@ -261,4 +261,21 @@ impl Team {
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to get the team summary".into()))
     }
+
+    /// Get the team id the user belongs to
+    ///
+    /// # Errors
+    /// Will return an error if the user is not in any team
+    /// Might return an error if there's an issue communicating with the database
+    pub async fn id(uid: Uuid, connection: PgConnection) -> exn::Result<Uuid, Error> {
+        use schema::member_of::dsl::{member_of, team};
+
+        connection
+            .interact(move |connection| member_of.find(uid).select(team).first::<Uuid>(connection))
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to get the team's id".into()))
+    }
 }

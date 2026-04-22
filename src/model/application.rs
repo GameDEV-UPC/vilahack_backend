@@ -142,6 +142,7 @@ pub enum Status {
     Applied,
     Accepted,
     Confirmed,
+    Cancelled,
     Participating,
     Disqualified,
     Finisher,
@@ -326,7 +327,7 @@ impl Application {
     /// Might return an error if there's an issue communicating with the database
     pub async fn change_status(
         uid: Uuid,
-        from: Status,
+        from: Vec<Status>,
         to: Status,
         connection: Connection,
     ) -> exn::Result<(), Error> {
@@ -334,7 +335,7 @@ impl Application {
 
         match connection
             .interact(move |connection| {
-                update(application.filter(id.eq(uid)).filter(status.eq(from)))
+                update(application.filter(id.eq(uid)).filter(status.eq_any(from)))
                     .set(status.eq(to))
                     .execute(connection)
             })

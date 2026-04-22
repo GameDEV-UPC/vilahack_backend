@@ -63,6 +63,8 @@ pub struct Config {
     pub jwk: Jwk,
     pub allowed_ranges: Vec<IpNet>,
 
+    pub puzzle_directory: PathBuf,
+
     pub deployment: String,
     #[serde(with = "levelfilter")]
     pub trace_level: LevelFilter,

@@ -10,7 +10,7 @@ use axum::{
 };
 use tower_http::cors::CorsLayer;
 
-use backend::{api, config::CONFIG, database, telemetry::init_tracing_subscriber};
+use backend::{State, api, config::CONFIG, telemetry::init_tracing_subscriber};
 
 #[tracing::instrument]
 #[tokio::main]
@@ -22,11 +22,6 @@ async fn main() {
         .allow_methods([Method::GET, Method::PUT])
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
-    let state = Arc::new(
-        database::Pool::from_url(&CONFIG.database_url)
-            .await
-            .unwrap(),
-    );
     let router = Router::new()
         .route("/v0/preinscribe", put(api::preinscription::preinscribe))
         .route("/v0/user/application", get(api::user::get))
@@ -59,7 +54,7 @@ async fn main() {
             get(api::puzzle::get_all_by_category),
         )
         .layer(cors_layer)
-        .with_state(state);
+        .with_state(Arc::new(State::new().await));
 
     tracing::info!("Starting server at {}...", CONFIG.bind_address);
     let listener = tokio::net::TcpListener::bind(CONFIG.bind_address)

@@ -7,6 +7,7 @@ use uuid::Uuid;
 use diesel::{
     deserialize::{FromSql, FromSqlRow},
     expression::AsExpression,
+    insert_into,
     pg::{Pg, PgValue},
     prelude::*,
     serialize::{self, IsNull, Output, ToSql},
@@ -62,6 +63,7 @@ impl ToSql<Jsonb, Pg> for Flags {
     Identifiable,
     Selectable,
     Insertable,
+    Default,
     Debug,
     Clone,
     Eq,
@@ -113,5 +115,28 @@ impl Attempt {
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to fetch the puzzle".into()))
             .map(|opt| opt.unwrap_or(0))
+    }
+
+    /// Begins a puzzle attempt if it hasn't already been done
+    ///
+    /// # Errors
+    /// Will return an error if the user does not have an application.
+    /// May return an error if there's an issue communicating with the database
+    pub async fn begin(self, connection: Connection) -> exn::Result<usize, Error> {
+        use schema::attempt::dsl::{attempt, puzzle, team};
+
+        connection
+            .interact(move |connection| {
+                insert_into(attempt)
+                    .values(self)
+                    .on_conflict((team, puzzle))
+                    .do_nothing()
+                    .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to begin an attempt".into()))
     }
 }

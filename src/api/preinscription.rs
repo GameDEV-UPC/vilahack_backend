@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{Json, extract::State, http::StatusCode};
 
-use crate::{database::Pool, error::ErrorResponse, model::preinscription::Preinscription};
+use crate::{State as Bstate, error::ErrorResponse, model::preinscription::Preinscription};
 
 /// Add the email to the preinscriptions table in the database
 ///
@@ -11,11 +11,11 @@ use crate::{database::Pool, error::ErrorResponse, model::preinscription::Preinsc
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/preinscribe", fields(method = "PUT"))]
 pub async fn preinscribe(
-    State(pool): State<Arc<Pool>>,
+    State(state): State<Arc<Bstate>>,
     Json(email): Json<String>,
 ) -> Result<StatusCode, ErrorResponse> {
     Preinscription::new(email)
-        .preinscribe(pool.get().await?)
+        .preinscribe(state.get_connection().await?)
         .await?;
 
     Ok(StatusCode::OK)
