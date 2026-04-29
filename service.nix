@@ -24,8 +24,6 @@ in {
       Restart = "always";
       User = "backend";
       Group = "vilahack";
-
-      EnvironmentFile = "${./.env}";
     };
   };
 }

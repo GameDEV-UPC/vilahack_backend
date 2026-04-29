@@ -114,7 +114,8 @@ pub async fn get_all_by_category(
 /// # Errors
 /// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
 /// not on an authorized network.
-/// Might return an error if there's an issue communicating with the database.
+/// Might return an error if there's an issue communicating with the database, if the generator
+/// fails to run or it there's any io issue.
 ///
 /// # Panics
 /// Should never panic. It will panic if `application/gzip` stops being a valid `CONTENT_TYPE`
@@ -197,6 +198,13 @@ pub async fn files(
     Ok((headers, body))
 }
 
+/// Register and attempt to solve and check the flag
+///
+/// # Errors
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
+/// not on an authorized network.
+/// Might return an error if there's an issue communicating with the database or if the check fails
+/// to run.
 #[tracing::instrument(skip_all, name = "/v0/puzzle/solve", fields(method = "POST"))]
 pub async fn solve(
     State(state): State<Arc<Bstate>>,

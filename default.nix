@@ -2,6 +2,8 @@
 , postgresql
 , pkgconf
 , openssl
+, nix
+, bash
 }:
 
 let
@@ -16,6 +18,6 @@ in
     src = ./.;
 
     nativeBuildInputs = [ pkgconf ];
-    buildInputs = [ postgresql openssl ];
+    buildInputs = [ postgresql openssl nix bash ];
     cargoLock.lockFile = ./Cargo.lock;
   }

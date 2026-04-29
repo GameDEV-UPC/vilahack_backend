@@ -6,7 +6,7 @@ use axum::{
         Method,
         header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     },
-    routing::{get, put, post},
+    routing::{get, post, put},
 };
 use tower_http::cors::CorsLayer;
 

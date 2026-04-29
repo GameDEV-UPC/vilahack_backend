@@ -298,7 +298,7 @@ impl Puzzle {
         };
 
         if !output_path.is_dir() {
-            let Ok(status) = Command::new("nix")
+            let status = Command::new("nix")
                 .args([
                     "develop",
                     "--command",
@@ -307,11 +307,12 @@ impl Puzzle {
                     &team.to_string(),
                 ])
                 .current_dir(puzzle_path)
-                .status()
-            else {
+                .status();
+
+            let Ok(status) = status else {
                 return Err(exn::Exn::new(Error::puzzle(
                     PuzzleError::Generator,
-                    "Could not run generator".into(),
+                    format!("Could not run generator: {status:?}"),
                 )));
             };
 
@@ -344,7 +345,7 @@ impl Puzzle {
             path
         };
 
-        let Ok(status) = Command::new("nix")
+        let status = Command::new("nix")
             .args([
                 "develop",
                 "--command",
@@ -354,11 +355,12 @@ impl Puzzle {
                 &flag,
             ])
             .current_dir(puzzle_path)
-            .status()
-        else {
+            .status();
+
+        let Ok(status) = status else {
             return Err(exn::Exn::new(Error::puzzle(
                 PuzzleError::Generator,
-                "Could not run check".into(),
+                format!("Could not run check: {status:?}"),
             )));
         };
 
