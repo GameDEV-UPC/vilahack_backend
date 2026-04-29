@@ -300,6 +300,10 @@ impl Puzzle {
         if !output_path.is_dir() {
             let status = Command::new("nix")
                 .args([
+                    "--extra-experimental-features",
+                    "nix-command",
+                    "--extra-experimental-features",
+                    "flakes",
                     "develop",
                     "--command",
                     "bash",
@@ -347,6 +351,10 @@ impl Puzzle {
 
         let status = Command::new("nix")
             .args([
+                "--extra-experimental-features",
+                "nix-command",
+                "--extra-experimental-features",
+                "flakes",
                 "develop",
                 "--command",
                 "bash",
