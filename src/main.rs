@@ -6,7 +6,7 @@ use axum::{
         Method,
         header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     },
-    routing::{get, put},
+    routing::{get, put, post},
 };
 use tower_http::cors::CorsLayer;
 
@@ -19,7 +19,7 @@ async fn main() {
 
     let cors_layer = CorsLayer::new()
         .allow_origin(CONFIG.allowed_origins.clone())
-        .allow_methods([Method::GET, Method::PUT])
+        .allow_methods([Method::GET, Method::PUT, Method::POST])
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
 
     let router = Router::new()
@@ -53,6 +53,8 @@ async fn main() {
             "/v0/puzzle/all/by_category",
             get(api::puzzle::get_all_by_category),
         )
+        .route("/v0/puzzle/files", get(api::puzzle::files))
+        .route("/v0/puzzle/solve", post(api::puzzle::solve))
         .layer(cors_layer)
         .with_state(Arc::new(State::new().await));
 

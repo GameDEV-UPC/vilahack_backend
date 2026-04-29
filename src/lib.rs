@@ -7,15 +7,15 @@ pub mod error;
 pub mod model;
 pub mod telemetry;
 
-use std::{collections::HashMap, path::PathBuf, sync::Mutex};
-use tokio::task::JoinHandle;
+use std::collections::HashMap;
+use tokio::{sync::Mutex, task::JoinHandle};
 
 use deadpool_diesel::postgres::Connection;
 use uuid::Uuid;
 
 use crate::{config::CONFIG, database::Pool, error::Error};
 
-pub type Taskmap = HashMap<(Uuid, Uuid), JoinHandle<exn::Result<PathBuf, Error>>>;
+pub type Taskmap = HashMap<(Uuid, Uuid), JoinHandle<exn::Result<(), Error>>>;
 
 pub struct State {
     pool: Pool,

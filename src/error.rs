@@ -60,6 +60,8 @@ pub enum PuzzleError {
     Generator,
     FilesMissing,
     NotFound,
+    Processing,
+    IncorrectFlag,
 }
 
 impl Error {
@@ -290,6 +292,19 @@ impl ErrorResponse {
             "This user is not authorized to do this operation".into(),
         )))
     }
+
+    #[must_use]
+    pub fn busy() -> Self {
+        Self(exn::Exn::new(Error::puzzle(
+            PuzzleError::Processing,
+            "Files are being generated".into(),
+        )))
+    }
+
+    #[must_use]
+    pub fn internal(message: String) -> Self {
+        Self(exn::Exn::new(Error::upstream(message)))
+    }
 }
 
 impl std::convert::From<exn::Exn<Error>> for ErrorResponse {
@@ -326,14 +341,20 @@ impl IntoResponse for ErrorResponse {
                 tracing::warn!("{error:?}");
                 StatusCode::GATEWAY_TIMEOUT
             }
-            Source::Database(DatabaseError::NotFound) => StatusCode::NOT_FOUND,
+            Source::Database(DatabaseError::NotFound) | Source::Puzzle(PuzzleError::NotFound) => {
+                StatusCode::NOT_FOUND
+            }
             Source::Database(DatabaseError::ConstraintViolation) => StatusCode::PRECONDITION_FAILED,
 
             // Puzzle errors
-            Source::Puzzle(PuzzleError::NotFound) => StatusCode::NOT_FOUND,
             Source::Puzzle(
                 PuzzleError::FilesMissing | PuzzleError::Io | PuzzleError::Generator,
-            ) => StatusCode::INTERNAL_SERVER_ERROR,
+            ) => {
+                tracing::warn!("{error:?}");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            Source::Puzzle(PuzzleError::Processing) => StatusCode::ACCEPTED,
+            Source::Puzzle(PuzzleError::IncorrectFlag) => StatusCode::NOT_ACCEPTABLE,
 
             // Anything else
             _ => {

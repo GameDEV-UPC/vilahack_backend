@@ -1,23 +1,22 @@
-use std::{
-    collections::HashMap,
-    path::PathBuf,
-    sync::{Arc, MutexGuard},
-    time::Duration,
+use std::{collections::HashMap, sync::Arc};
+
+use axum::{
+    Json,
+    body::Body,
+    extract::{Query, State},
+    http::{HeaderMap, header},
+    response::IntoResponse,
 };
 
-use axum::{Json, extract::State};
-use chrono::Utc;
-use uuid::Uuid;
-
-use tokio::task::JoinHandle;
+use tokio_util::io::ReaderStream;
 
 use crate::{
     State as Bstate,
-    api::Id,
+    api::{FlagCheckQuery, Id},
     authentication::Authenticated,
     config::CONFIG,
     discrimination::Discriminate,
-    error::{Error, ErrorResponse},
+    error::ErrorResponse,
     model::{
         attempt::Attempt,
         puzzle::{Category, Puzzle},
@@ -110,90 +109,102 @@ pub async fn get_all_by_category(
     Ok(Json(map))
 }
 
-// async fn check_finished(
-//     handle: &JoinHandle<Result<PathBuf, Error>>,
-//     mut tasks: MutexGuard<'_, HashMap<(Uuid, Uuid), JoinHandle<Result<PathBuf, exn::Exn<Error>>>>>,
-//     key: &(Uuid, Uuid),
-// ) -> exn::Result<PathBuf, Error> {
-//     if handle.is_finished() {
-//         let handle = tasks.remove(key).expect("Mutex got poisoned");
-//         drop(tasks);
-// 
-//         Ok(handle.await.expect("Should never panic")?)
-//     } else {
-//         todo!(); // TODO Warn the client that the task ain't done running
-//     }
-// }
+/// Get the puzzle's archive
+///
+/// # Errors
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
+/// not on an authorized network.
+/// Might return an error if there's an issue communicating with the database.
+///
+/// # Panics
+/// Should never panic. It will panic if `application/gzip` stops being a valid `CONTENT_TYPE`
+/// header value and if `attachment; filename="..."` stops being a valid `CONTENT_DISPOSITION` value.
+/// It will also panic if the filename is somehow bad and not valid inside the header
+#[tracing::instrument(skip_all, name = "/v0/puzzle/files", fields(method = "GET"))]
+pub async fn files(
+    State(state): State<Arc<Bstate>>,
+    Authenticated { sub, .. }: Authenticated,
+    _: Discriminate,
+    Id(id): Id,
+) -> Result<impl IntoResponse, ErrorResponse> {
+    let team = Team::id(sub, state.get_connection().await?).await?;
+    Attempt::begin(state.get_connection().await?, id, team).await?;
 
-// /// Get the puzzle's archive
-// ///
-// /// # Errors
-// /// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
-// /// not on an authorized network.
-// /// Might return an error if there's an issue communicating with the database.
-// #[tracing::instrument(skip_all, name = "/v0/puzzle/files", fields(method = "GET"))]
-// pub async fn files(
-//     State(state): State<Arc<Bstate>>,
-//     Authenticated { sub, .. }: Authenticated,
-//     _: Discriminate,
-//     Id(id): Id,
-// ) -> Result<(), ErrorResponse> {
-//     let team = Team::id(sub, state.get_connection().await?).await?;
-// 
-//     Attempt {
-//         puzzle: id,
-//         team,
-//         created_at: Utc::now(),
-//         ..Default::default()
-//     }
-//     .begin(state.get_connection().await?)
-//     .await?;
-// 
-//     let Ok(mut tasks) = state.tasks.lock() else {
-//         todo!();
-//     };
-// 
-//     let mut path: Option<PathBuf> = None;
-// 
-//     match tasks.get(&(id, team)) {
-//         // If the task is already runing, one shouldn't be spawned.
-//         Some(handle) => {
-//             check_finished(handle, tasks, &(id, team)).await?;
-//         }
-// 
-//         // If the task isn't already running, spawn it.
-//         None => {
-//             // The handle is put directly in the hashmap before waiting to avoid races
-//             tasks.insert((id, team), tokio::spawn(Puzzle::files(team, id)));
-//             drop(tasks);
-// 
-//             // Wait 100ms for it to run. If the files already exist, this will save the client from
-//             // making another call
-//             match tokio::time::timeout(Duration::from_millis(100), async {
-//                 let mut tasks = state.tasks.lock().expect("Mutex got poisoned");
-// 
-//                 // We expect the handle to still be present under the same key.
-//                 if let Some(handle) = tasks.get(&(id, team)) {
-//                     if !handle.is_finished() {
-//                         let handle = tasks.remove(&(id, team)).expect("key existed");
-//                         drop(tasks);
-//                         Some(handle.await.expect("Should never panic"))
-//                     } else {
-//                         // Not finished yet
-//                         None
-//                     }
-//                 } else {
-//                     // Not found (shouldn't normally happen) — treat as absent
-//                     None
-//                 }
-//             })
-//             .await
-//             {
-//                 Ok(Some(res)) => path = Some(res?),
-//                 _ => todo!(), // Tell the client to wait
-//             }
-//         }
-//     };
-// 
-//     Ok(())
-// }
+    // Check if a generation task exists. This prevents more than one instance of `Puzzle::generate`
+    // being ran at any instance.
+    //
+    // There's an issue here. Finished tasks can accumulate on the hashmap if a client asks for
+    // something to be generated but never asks for the results. There should be come sort of
+    // garbage collector for these.
+    let mut tasks = state.tasks.lock().await;
+    if let Some(handle) = tasks.get(&(id, team)) {
+        if handle.is_finished() {
+            let Some(handle) = tasks.remove(&(id, team)) else {
+                return Err(ErrorResponse::internal("Mutex got poisoned".into()));
+            };
+
+            match handle.await {
+                Ok(Ok(())) => (),
+                Ok(Err(err)) => Err(err)?,
+                _ => return Err(ErrorResponse::internal("Generator crashed".into())),
+            }
+        } else {
+            return Err(ErrorResponse::busy());
+        }
+    }
+
+    let Some(path) = Puzzle::archive(id, team)? else {
+        let handle = tokio::task::spawn_blocking(move || Puzzle::generate(id, team));
+        tasks.insert((id, team), handle);
+
+        return Err(ErrorResponse::busy());
+    };
+
+    drop(tasks);
+
+    let file = match tokio::fs::File::open(&path).await {
+        Ok(file) => file,
+        Err(err) => {
+            return Err(ErrorResponse::internal(format!(
+                "Could not open file: {err}"
+            )));
+        }
+    };
+
+    let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+        return Err(ErrorResponse::internal(
+            "Could not get filename for generator result".into(),
+        ));
+    };
+
+    let Ok(content_header) = format!("attachment; filename=\"{file_name}\"").parse() else {
+        return Err(ErrorResponse::internal(
+            "Could no parse CONTENT_DISPOSITION header".into(),
+        ));
+    };
+
+    let body = Body::from_stream(ReaderStream::new(file));
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        "application/gzip"
+            .parse()
+            .expect("application/gzip is no longer a valid mimetype."),
+    );
+    headers.insert(header::CONTENT_DISPOSITION, content_header);
+
+    Ok((headers, body))
+}
+
+#[tracing::instrument(skip_all, name = "/v0/puzzle/solve", fields(method = "POST"))]
+pub async fn solve(
+    State(state): State<Arc<Bstate>>,
+    Authenticated { sub, .. }: Authenticated,
+    Query(query): Query<FlagCheckQuery>,
+    _: Discriminate,
+) -> Result<(), ErrorResponse> {
+    let team = Team::id(sub, state.get_connection().await?).await?;
+
+    Ok(Puzzle::solve(query.id, team, query.flag, state.get_connection().await?).await?)
+}

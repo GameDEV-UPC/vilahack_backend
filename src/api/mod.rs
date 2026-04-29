@@ -11,6 +11,12 @@ use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 use uuid::Uuid;
 
 #[derive(serde::Deserialize, Debug)]
+pub struct FlagCheckQuery {
+    pub id: Uuid,
+    pub flag: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
 pub struct UidQuery {
     id: Option<String>,
 }

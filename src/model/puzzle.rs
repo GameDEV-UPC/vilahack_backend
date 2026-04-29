@@ -22,18 +22,24 @@ use crate::{
     model::attempt::Attempt,
 };
 
-fn find_output(directory: PathBuf) -> exn::Result<PathBuf, Error> {
+fn find_output(directory: PathBuf) -> exn::Result<Option<PathBuf>, Error> {
     let directory_contents = match std::fs::read_dir(directory) {
         Ok(contents) => Ok(contents),
-        Err(err) => Err(Error::puzzle(PuzzleError::Io, err.to_string())),
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                return Ok(None);
+            }
+
+            Err(Error::puzzle(PuzzleError::Io, err.to_string()))
+        }
     };
 
-    for element in directory_contents?.filter_map(|e| e.ok()) {
+    for element in directory_contents?.filter_map(Result::ok) {
         if element.path().is_file()
             && let Some(extension) = element.path().extension()
             && extension == "gz"
         {
-            return Ok(element.path());
+            return Ok(Some(element.path()));
         }
     }
 
@@ -247,26 +253,20 @@ impl Puzzle {
         Ok(())
     }
 
-    fn generate(team: Uuid, path: PathBuf) -> exn::Result<(), Error> {
-        let Ok(status) = Command::new("nix develop --command bash generate.sh")
-            .arg(team.to_string())
-            .current_dir(path)
-            .status()
-        else {
-            return Err(exn::Exn::new(Error::puzzle(
-                PuzzleError::Generator,
-                "Could not run generator".into(),
-            )));
+    /// Returns the path to the puzzle's generated archive, if it's there.
+    ///
+    /// # Errors
+    /// Will error if there's any IO issue
+    pub fn archive(puzzle: Uuid, team: Uuid) -> exn::Result<Option<PathBuf>, Error> {
+        let output_path = {
+            let mut path = CONFIG.puzzle_directory.clone();
+            path.push(puzzle.to_string());
+            path.push("out");
+            path.push(team.to_string());
+            path
         };
 
-        if !status.success() {
-            return Err(exn::Exn::new(Error::puzzle(
-                PuzzleError::Generator,
-                "Generator exited with an error code".into(),
-            )));
-        }
-
-        Ok(())
+        find_output(output_path)
     }
 
     /// Returns the path to the puzzle's generated archive for the team.
@@ -283,7 +283,7 @@ impl Puzzle {
     /// # Errors
     /// Returns an error if the puzzle doesn't exist, if there's an issue reading the disk, if
     /// there's an issue running the generator or if the generator exits with an error code.
-    pub async fn files(puzzle: Uuid, team: Uuid) -> exn::Result<PathBuf, Error> {
+    pub fn generate(puzzle: Uuid, team: Uuid) -> exn::Result<(), Error> {
         let puzzle_path = {
             let mut path = CONFIG.puzzle_directory.clone();
             path.push(puzzle.to_string());
@@ -296,13 +296,83 @@ impl Puzzle {
             path.push(team.to_string());
             path
         };
-        
+
         if !output_path.is_dir() {
-            Self::generate(team, puzzle_path)?;
+            let Ok(status) = Command::new("nix")
+                .args([
+                    "develop",
+                    "--command",
+                    "bash",
+                    "generate.sh",
+                    &team.to_string(),
+                ])
+                .current_dir(puzzle_path)
+                .status()
+            else {
+                return Err(exn::Exn::new(Error::puzzle(
+                    PuzzleError::Generator,
+                    "Could not run generator".into(),
+                )));
+            };
+
+            if !status.success() {
+                return Err(exn::Exn::new(Error::puzzle(
+                    PuzzleError::Generator,
+                    "Generator exited with an error code".into(),
+                )));
+            }
         }
 
-        find_output(output_path)
+        Ok(())
     }
 
-    // TODO solve
+    /// Checks if the flag is correct for the given puzzle+team
+    ///
+    /// # Errors
+    /// Returns an error if the flag is incorrect.
+    /// Might return an error if there's an issue running the checker, for example if it's not
+    /// there or it can't be read.
+    pub async fn solve(
+        puzzle: Uuid,
+        team: Uuid,
+        flag: String,
+        connection: Connection,
+    ) -> exn::Result<(), Error> {
+        let puzzle_path = {
+            let mut path = CONFIG.puzzle_directory.clone();
+            path.push(puzzle.to_string());
+            path
+        };
+
+        let Ok(status) = Command::new("nix")
+            .args([
+                "develop",
+                "--command",
+                "bash",
+                "check.sh",
+                &team.to_string(),
+                &flag,
+            ])
+            .current_dir(puzzle_path)
+            .status()
+        else {
+            return Err(exn::Exn::new(Error::puzzle(
+                PuzzleError::Generator,
+                "Could not run check".into(),
+            )));
+        };
+
+        let correct = status.success();
+
+        Attempt::append(connection, puzzle, team, flag, correct).await?;
+
+        if !correct {
+            return Err(exn::Exn::new(Error::puzzle(
+                PuzzleError::IncorrectFlag,
+                "Flag is incorrect".into(),
+            )));
+        }
+
+        Ok(())
+    }
 }

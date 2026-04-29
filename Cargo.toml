@@ -1,11 +1,12 @@
 [package]
 name = "backend"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs"] }
+tokio-util = { version = "0.7", features = ["io"] }
 
 # Database connection
 diesel = { version = "2.3", features = ["postgres", "uuid", "chrono", "serde_json"] }

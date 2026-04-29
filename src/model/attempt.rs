@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use diesel::{
     deserialize::{FromSql, FromSqlRow},
+    dsl::sql,
     expression::AsExpression,
     insert_into,
     pg::{Pg, PgValue},
@@ -122,14 +123,25 @@ impl Attempt {
     /// # Errors
     /// Will return an error if the user does not have an application.
     /// May return an error if there's an issue communicating with the database
-    pub async fn begin(self, connection: Connection) -> exn::Result<usize, Error> {
-        use schema::attempt::dsl::{attempt, puzzle, team};
+    pub async fn begin(
+        connection: Connection,
+        puzzle: Uuid,
+        team: Uuid,
+    ) -> exn::Result<usize, Error> {
+        use schema::attempt::dsl::{attempt, puzzle as puzzle_dsl, team as team_dsl};
+
+        let att = Self {
+            puzzle,
+            team,
+            created_at: Utc::now(),
+            ..Default::default()
+        };
 
         connection
             .interact(move |connection| {
                 insert_into(attempt)
-                    .values(self)
-                    .on_conflict((team, puzzle))
+                    .values(att)
+                    .on_conflict((team_dsl, puzzle_dsl))
                     .do_nothing()
                     .execute(connection)
             })
@@ -138,5 +150,57 @@ impl Attempt {
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to begin an attempt".into()))
+    }
+
+    /// Appends an attempted flag to an attempt. Marks the attempt as solved if the flag is correct.
+    ///
+    /// Will create an attempt if one does't already exist
+    ///
+    /// # Errors
+    /// Will return an error if the user does not have an application.
+    /// May return an error if there's an issue communicating with the database
+    pub async fn append(
+        connection: Connection,
+        puzzle: Uuid,
+        team: Uuid,
+        flag: String,
+        correct: bool,
+    ) -> exn::Result<usize, Error> {
+        use schema::attempt::dsl;
+
+        let solved_at = if correct { Some(Utc::now()) } else { None };
+
+        let att = Self {
+            puzzle,
+            team,
+            created_at: Utc::now(),
+            solved_at,
+            flags: Some(Flags(vec![flag])),
+            ..Default::default()
+        };
+
+        connection
+            .interact(move |connection| {
+                insert_into(dsl::attempt)
+                    .values(att)
+                    .on_conflict((dsl::team, dsl::puzzle))
+                    .do_update()
+                    .set((
+                        dsl::flags.eq(sql::<diesel::sql_types::Nullable<Jsonb>>(
+                            "COALESCE(attempt.flags, '[]'::jsonb) || EXCLUDED.flags",
+                        )),
+                        dsl::solved_at.eq(sql::<
+                            diesel::sql_types::Nullable<diesel::sql_types::Timestamptz>,
+                        >(
+                            "COALESCE(attempt.solved_at, EXCLUDED.solved_at)"
+                        )),
+                    ))
+                    .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to append to the attempt".into()))
     }
 }
