@@ -18,12 +18,17 @@ in {
       "tempo.service"
       "prometheus.service"
     ];
+    
+    path = with pkgs; [ nix bash ];
 
     serviceConfig = {
       ExecStart = "${vilahack_backend}/bin/backend";
       Restart = "always";
       User = "backend";
       Group = "vilahack";
+
+      StateDirectory = "vilahack_backend";
+      Environment = "HOME=/var/lib/vilahack_backend";
     };
   };
 }

@@ -8,7 +8,7 @@
 
 let
   package_name = "vilahack_backend";
-  version = "0.5.1";
+  version = "0.5.2";
 in
   rustPlatform.buildRustPackage {
     name = package_name;

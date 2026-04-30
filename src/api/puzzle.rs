@@ -216,3 +216,24 @@ pub async fn solve(
 
     Ok(Puzzle::solve(query.id, team, query.flag, state.get_connection().await?).await?)
 }
+
+/// Register and attempt to solve and check the flag
+///
+/// # Errors
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
+/// not on an authorized network.
+/// Might return an error if there's an issue communicating with the database or if the check fails
+/// to run.
+#[tracing::instrument(skip_all, name = "/v0/puzzle/clue/next", fields(method = "POST"))]
+pub async fn next_clue(
+    State(state): State<Arc<Bstate>>,
+    Authenticated { sub, .. }: Authenticated,
+    _: Discriminate,
+    Id(id): Id,
+) -> Result<Json<usize>, ErrorResponse> {
+    let team = Team::id(sub, state.get_connection().await?).await?;
+
+    Ok(Json(
+        Attempt::next_clue(id, team, state.get_connection().await?).await?,
+    ))
+}

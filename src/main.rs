@@ -55,6 +55,7 @@ async fn main() {
         )
         .route("/v0/puzzle/files", get(api::puzzle::files))
         .route("/v0/puzzle/solve", post(api::puzzle::solve))
+        .route("/v0/puzzle/clue/next", post(api::puzzle::next_clue))
         .layer(cors_layer)
         .with_state(Arc::new(State::new().await));
 

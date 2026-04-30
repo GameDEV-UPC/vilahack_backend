@@ -203,4 +203,44 @@ impl Attempt {
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to append to the attempt".into()))
     }
+
+    /// Increments the clues_used counter by 1
+    ///
+    /// Will create an attempt if one does't already exist
+    ///
+    /// # Errors
+    /// Will return an error if the user does not have an application.
+    /// May return an error if there's an issue communicating with the database
+    pub async fn next_clue(
+        puzzle: Uuid,
+        team: Uuid,
+        connection: Connection,
+    ) -> exn::Result<usize, Error> {
+        use schema::attempt::dsl;
+
+        let att = Self {
+            puzzle,
+            team,
+            created_at: Utc::now(),
+            clues_used: 1,
+            ..Default::default()
+        };
+
+        connection
+            .interact(move |connection| {
+                insert_into(dsl::attempt)
+                    .values(att)
+                    .on_conflict((dsl::team, dsl::puzzle))
+                    .do_update()
+                    .set((
+                        dsl::clues_used.eq(sql::<diesel::sql_types::SmallInt>("attempt.clues_used + 1")),
+                    ))
+                    .execute(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to append to the attempt".into()))
+    }
 }
