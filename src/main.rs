@@ -42,6 +42,7 @@ async fn main() {
         )
         .route("/v0/user/attendance/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
+        .route("/v0/user/participate", put(api::user::participate))
         .route("/v0/team", get(api::team::summary))
         .route("/v0/team", put(api::team::new))
         .route("/v0/team/join", put(api::team::join))

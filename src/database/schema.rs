@@ -84,8 +84,6 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(application, member_of, team, attempt, puzzle);
-
 diesel::table! {
     use diesel::sql_types::Text;
 
@@ -128,3 +126,40 @@ diesel::table! {
 
 diesel::joinable!(attempt -> puzzle (puzzle));
 diesel::joinable!(attempt -> team (team));
+
+diesel::table! {
+    use diesel::sql_types::{Uuid, Nullable, Text, Bool, Timestamptz};
+
+    event (id) {
+        id -> Uuid,
+        name -> Text,
+        description -> Text,
+        location -> Text,
+        begins_at -> Timestamptz,
+        ends_at -> Nullable<Timestamptz>,
+        ommit -> Bool,
+    }
+}
+
+diesel::table! {
+    use diesel::sql_types::{Uuid, Timestamptz};
+
+    participate (user, event) {
+        user -> Uuid,
+        event -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::joinable!(participate -> event (event));
+diesel::joinable!(participate -> application (user));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    application,
+    member_of,
+    team,
+    attempt,
+    puzzle,
+    participate,
+    event
+);

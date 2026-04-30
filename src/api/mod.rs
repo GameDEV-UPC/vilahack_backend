@@ -8,13 +8,10 @@ use axum::{
     http::{StatusCode, request::Parts},
 };
 use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
+use chrono::Utc;
 use uuid::Uuid;
 
-#[derive(serde::Deserialize, Debug)]
-pub struct FlagCheckQuery {
-    pub id: Uuid,
-    pub flag: String,
-}
+use crate::model::event::Participate;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct UidQuery {
@@ -91,4 +88,49 @@ where
 #[derive(serde::Deserialize, Debug)]
 pub struct Name {
     name: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct FlagCheckQuery {
+    pub id: Uuid,
+    pub flag: String,
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub struct ParticipateQuery {
+    pub id: String,
+    pub event: Uuid,
+}
+
+impl<S> FromRequestParts<S> for Participate
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Ok(query) = Query::<ParticipateQuery>::from_request_parts(parts, state).await else {
+            return Err((StatusCode::BAD_REQUEST, "Queries missing"));
+        };
+
+        let user = if let Ok(id) = Uuid::try_parse(&query.id) {
+            id
+        } else {
+            let mut decoded: [u8; 16] = [0; 16];
+            if BASE64_STANDARD_NO_PAD
+                .decode_slice(&query.id, &mut decoded)
+                .is_err()
+            {
+                return Err((StatusCode::BAD_REQUEST, "id could not be decoded"));
+            }
+
+            uuid::Uuid::from_bytes(decoded)
+        };
+
+        Ok(Self {
+            user,
+            event: query.event,
+            created_at: Utc::now(),
+        })
+    }
 }
