@@ -187,7 +187,7 @@ pub struct Puzzle {
     pub clues: Option<Clues>,
     pub start: Option<DateTime<Utc>>,
     pub end: Option<DateTime<Utc>>,
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(rename = "solved")]
     pub ommit: bool,
 }
 
@@ -199,11 +199,26 @@ impl Puzzle {
     /// # Errors
     /// Will return an error if the puzzle doesn't exist.
     /// May return an error if there's an issue communicating with the database.
-    pub async fn get(id: Uuid, connection: Connection) -> exn::Result<Self, Error> {
-        use schema::puzzle::dsl::puzzle;
+    pub async fn get(id: Uuid, team: Uuid, connection: Connection) -> exn::Result<Self, Error> {
+        use schema::attempt::dsl as attempt_dsl;
+        use schema::puzzle::dsl as puzzle_dsl;
 
         connection
-            .interact(move |connection| puzzle.find(id).select(Self::as_select()).first(connection))
+            .interact(move |connection| {
+                let (mut fetched_puzzle, attempt) = puzzle_dsl::puzzle
+                    .find(id)
+                    .left_join(
+                        attempt_dsl::attempt.on(attempt_dsl::puzzle
+                            .eq(puzzle_dsl::id)
+                            .and(attempt_dsl::team.eq(team))),
+                    )
+                    .select((Self::as_select(), Option::<Attempt>::as_select()))
+                    .first::<(Self, Option<Attempt>)>(connection)?;
+
+                fetched_puzzle.ommit = attempt.and_then(|att| att.solved_at).is_some();
+
+                Ok::<_, diesel::result::Error>(fetched_puzzle)
+            })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
@@ -215,15 +230,29 @@ impl Puzzle {
     ///
     /// # Errors
     /// May return an error if there's an issue communicating with the database.
-    pub async fn get_all(connection: Connection) -> exn::Result<Vec<Self>, Error> {
-        use schema::puzzle::dsl::{ommit, puzzle};
+    pub async fn get_all(team: Uuid, connection: Connection) -> exn::Result<Vec<Self>, Error> {
+        use schema::attempt::dsl as attempt_dsl;
+        use schema::puzzle::dsl as puzzle_dsl;
 
         connection
             .interact(move |connection| {
-                puzzle
-                    .select(Self::as_select())
-                    .filter(ommit.eq(false))
-                    .get_results(connection)
+                let results = puzzle_dsl::puzzle
+                    .left_join(
+                        attempt_dsl::attempt.on(attempt_dsl::puzzle
+                            .eq(puzzle_dsl::id)
+                            .and(attempt_dsl::team.eq(team))),
+                    )
+                    .filter(puzzle_dsl::ommit.eq(false))
+                    .select((Self::as_select(), Option::<Attempt>::as_select()))
+                    .load::<(Self, Option<Attempt>)>(connection)?;
+
+                let mut puzzles = Vec::with_capacity(results.len());
+                for (mut puzzle, attempt) in results {
+                    puzzle.ommit = attempt.and_then(|att| att.solved_at).is_some();
+                    puzzles.push(puzzle);
+                }
+
+                Ok::<_, diesel::result::Error>(puzzles)
             })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno

@@ -204,7 +204,7 @@ impl Attempt {
             .or_raise(|| Error::upstream("Failed to append to the attempt".into()))
     }
 
-    /// Increments the clues_used counter by 1
+    /// Increments the `clues_used` counter by 1
     ///
     /// Will create an attempt if one does't already exist
     ///
@@ -232,9 +232,8 @@ impl Attempt {
                     .values(att)
                     .on_conflict((dsl::team, dsl::puzzle))
                     .do_update()
-                    .set((
-                        dsl::clues_used.eq(sql::<diesel::sql_types::SmallInt>("attempt.clues_used + 1")),
-                    ))
+                    .set((dsl::clues_used
+                        .eq(sql::<diesel::sql_types::SmallInt>("attempt.clues_used + 1")),))
                     .execute(connection)
             })
             .await

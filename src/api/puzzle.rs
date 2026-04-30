@@ -37,7 +37,8 @@ pub async fn get(
     _: Discriminate,
     Id(id): Id,
 ) -> Result<Json<Puzzle>, ErrorResponse> {
-    let mut puzzle = Puzzle::get(id, state.get_connection().await?).await?;
+    let team = Team::id(sub, state.get_connection().await?).await?;
+    let mut puzzle = Puzzle::get(id, team, state.get_connection().await?).await?;
 
     if role != CONFIG.jwk.admin_role {
         puzzle
@@ -59,7 +60,8 @@ pub async fn get_all(
     Authenticated { sub, role }: Authenticated,
     _: Discriminate,
 ) -> Result<Json<Vec<Puzzle>>, ErrorResponse> {
-    let mut puzzles = Puzzle::get_all(state.get_connection().await?).await?;
+    let team = Team::id(sub, state.get_connection().await?).await?;
+    let mut puzzles = Puzzle::get_all(team, state.get_connection().await?).await?;
 
     if role == CONFIG.jwk.admin_role {
         return Ok(Json(puzzles));
@@ -86,7 +88,8 @@ pub async fn get_all_by_category(
     Authenticated { sub, role }: Authenticated,
     _: Discriminate,
 ) -> Result<Json<HashMap<Category, Vec<Puzzle>>>, ErrorResponse> {
-    let mut puzzles = Puzzle::get_all(state.get_connection().await?).await?;
+    let team = Team::id(sub, state.get_connection().await?).await?;
+    let mut puzzles = Puzzle::get_all(team, state.get_connection().await?).await?;
     let mut map: HashMap<Category, Vec<Puzzle>> = HashMap::new();
 
     // This could be parallelized. For now, there aren't enough puzzles to warrant the effort.
@@ -217,7 +220,7 @@ pub async fn solve(
     Ok(Puzzle::solve(query.id, team, query.flag, state.get_connection().await?).await?)
 }
 
-/// Register and attempt to solve and check the flag
+/// Unlock the next clue
 ///
 /// # Errors
 /// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
