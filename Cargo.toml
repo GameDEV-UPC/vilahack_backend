@@ -14,7 +14,7 @@ deadpool-diesel = { version = "0.6", features = ["postgres"] }
 diesel-derive-enum = { version = "2", features = ["postgres"] }
 
 # HTTP server / API
-axum = {version =  "0.8", features = ["macros"]}
+axum = "0.8"
 tower-http = { version = "0.6", features = ["cors"] }
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 

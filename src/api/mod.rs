@@ -2,6 +2,7 @@ pub mod preinscription;
 pub mod puzzle;
 pub mod team;
 pub mod user;
+pub mod event;
 
 use axum::{
     extract::{FromRequestParts, Query},
@@ -98,7 +99,7 @@ pub struct FlagCheckQuery {
 
 #[derive(serde::Deserialize, Debug)]
 pub struct ParticipateQuery {
-    pub id: String,
+    pub user: String,
     pub event: Uuid,
 }
 
@@ -113,12 +114,12 @@ where
             return Err((StatusCode::BAD_REQUEST, "Queries missing"));
         };
 
-        let user = if let Ok(id) = Uuid::try_parse(&query.id) {
+        let user = if let Ok(id) = Uuid::try_parse(&query.user) {
             id
         } else {
             let mut decoded: [u8; 16] = [0; 16];
             if BASE64_STANDARD_NO_PAD
-                .decode_slice(&query.id, &mut decoded)
+                .decode_slice(&query.user, &mut decoded)
                 .is_err()
             {
                 return Err((StatusCode::BAD_REQUEST, "id could not be decoded"));

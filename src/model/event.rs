@@ -38,6 +38,25 @@ pub struct Event {
     pub ommit: bool,
 }
 
+impl Event {
+    pub async fn all(connection: Connection) -> exn::Result<Vec<Self>, Error> {
+        use crate::database::schema::event::dsl::{begins_at, event};
+
+        connection
+            .interact(move |connection| {
+                event
+                    .select(Self::as_select())
+                    .order(begins_at.asc())
+                    .get_results(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to update the application".into()))
+    }
+}
+
 #[derive(
     Queryable,
     Identifiable,

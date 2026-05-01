@@ -21,7 +21,6 @@ use crate::{
     error::ErrorResponse,
     model::{
         application::{Application, ApplicationSummary, ApplicationUpdate, Status},
-        event::Participate,
     },
 };
 
@@ -251,24 +250,4 @@ pub async fn qr(
         )
         .body(body::Body::from(qr))
         .expect("HTTP headers are broken! The web is in shambles."))
-}
-
-/// Set the check in timestamp for the user
-///
-/// # Errors
-/// Will return an error if the user hasn't made an application, if they've already checked in or
-/// if they're not accepted. Will also return an error if the caller is not an admin.
-/// Might return an error if there's an issue communicating with the database.
-#[axum::debug_handler]
-#[tracing::instrument(skip_all, name = "/v0/user/participate", fields(method = "PUT"))]
-pub async fn participate(
-    State(state): State<Arc<Bstate>>,
-    Authenticated { role, .. }: Authenticated,
-    participate: Participate,
-) -> Result<Json<usize>, ErrorResponse> {
-    if role != CONFIG.jwk.admin_role {
-        return Err(ErrorResponse::insufficient_permissions());
-    }
-
-    Ok(Json(participate.post(state.get_connection().await?).await?))
 }

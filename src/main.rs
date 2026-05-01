@@ -42,7 +42,6 @@ async fn main() {
         )
         .route("/v0/user/attendance/check_in", put(api::user::check_in))
         .route("/v0/user/qr.svg", get(api::user::qr))
-        .route("/v0/user/participate", put(api::user::participate))
         .route("/v0/team", get(api::team::summary))
         .route("/v0/team", put(api::team::new))
         .route("/v0/team/join", put(api::team::join))
@@ -57,6 +56,8 @@ async fn main() {
         .route("/v0/puzzle/files", get(api::puzzle::files))
         .route("/v0/puzzle/solve", post(api::puzzle::solve))
         .route("/v0/puzzle/clue/next", post(api::puzzle::next_clue))
+        .route("/v0/event/all", get(api::event::all))
+        .route("/v0/event/participate", put(api::event::participate))
         .layer(cors_layer)
         .with_state(Arc::new(State::new().await));
 
