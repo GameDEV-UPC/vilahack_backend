@@ -56,8 +56,13 @@ async fn main() {
         .route("/v0/puzzle/files", get(api::puzzle::files))
         .route("/v0/puzzle/solve", post(api::puzzle::solve))
         .route("/v0/puzzle/clue/next", post(api::puzzle::next_clue))
+        .route("/v0/event", get(api::event::get))
         .route("/v0/event/all", get(api::event::all))
-        .route("/v0/event/participate", put(api::event::participate))
+        .route(
+            "/v0/event/participation/all",
+            get(api::event::participations),
+        )
+        .route("/v0/event/participation", put(api::event::participate))
         .layer(cors_layer)
         .with_state(Arc::new(State::new().await));
 

@@ -19,9 +19,7 @@ use crate::{
     authentication::Authenticated,
     config::CONFIG,
     error::ErrorResponse,
-    model::{
-        application::{Application, ApplicationSummary, ApplicationUpdate, Status},
-    },
+    model::application::{Application, ApplicationSummary, ApplicationUpdate, Status},
 };
 
 /// Create the row in the Application table

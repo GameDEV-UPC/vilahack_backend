@@ -126,6 +126,7 @@ diesel::table! {
 
 diesel::joinable!(attempt -> puzzle (puzzle));
 diesel::joinable!(attempt -> team (team));
+diesel::joinable!(attempt -> member_of (team));
 
 diesel::table! {
     use diesel::sql_types::{Uuid, Nullable, Text, Bool, Timestamptz};

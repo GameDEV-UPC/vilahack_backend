@@ -39,6 +39,27 @@ pub struct Event {
 }
 
 impl Event {
+    /// Get the event with the given id
+    ///
+    /// # Errors
+    /// Will return an error if an event with the given id doesn't exist
+    /// Might return an error if there's an issue communicating with the database
+    pub async fn get(id: Uuid, connection: Connection) -> exn::Result<Self, Error> {
+        use crate::database::schema::event::dsl::event;
+
+        connection
+            .interact(move |connection| event.find(id).get_result(connection))
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to get event".into()))
+    }
+
+    /// Get all the events
+    ///
+    /// # Errors
+    /// Might return an error if there's an issue communicating with the database
     pub async fn all(connection: Connection) -> exn::Result<Vec<Self>, Error> {
         use crate::database::schema::event::dsl::{begins_at, event};
 
@@ -53,7 +74,7 @@ impl Event {
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
-            .or_raise(|| Error::upstream("Failed to update the application".into()))
+            .or_raise(|| Error::upstream("Failed to get all events".into()))
     }
 }
 
@@ -96,5 +117,50 @@ impl Participate {
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to update the application".into()))
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct Participation {
+    pub event: Uuid,
+    pub name: String,
+    pub began_at: DateTime<Utc>,
+    pub participated_at: DateTime<Utc>,
+}
+
+impl Participation {
+    /// Get all the user's participations
+    ///
+    /// # Errors
+    /// Might return an error if there's an issue communicating with the database
+    pub async fn get(uid: Uuid, connection: Connection) -> exn::Result<Vec<Self>, Error> {
+        use crate::database::schema::{
+            event::dsl::{begins_at, event as event_dsl, id as event_id, name as event_name},
+            participate::dsl::{created_at, participate, user},
+        };
+
+        let participations = connection
+            .interact(move |connection| {
+                participate
+                    .inner_join(event_dsl)
+                    .filter(user.eq(uid))
+                    .select((event_id, event_name, begins_at, created_at))
+                    .get_results(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to update the application".into()))?;
+
+        Ok(participations
+            .into_iter()
+            .map(|(event, name, began_at, participated_at)| Self {
+                event,
+                name,
+                began_at,
+                participated_at,
+            })
+            .collect())
     }
 }

@@ -1,6 +1,6 @@
 use deadpool_diesel::postgres::Connection as PgConnection;
 use diesel::{
-    Connection, ExpressionMethods, JoinOnDsl, QueryDsl, RunQueryDsl, Selectable,
+    Connection, ExpressionMethods, QueryDsl, RunQueryDsl, Selectable,
     dsl::count,
     insert_into,
     prelude::{Identifiable, Insertable, Queryable},
@@ -232,8 +232,8 @@ impl Team {
     /// Will return an error if the user is not in any team
     /// Might return an error if there's an issue communicating with the database
     pub async fn summary(user: Uuid, connection: PgConnection) -> exn::Result<TeamSummary, Error> {
-        use schema::application::dsl::{application, id as user_id, name as user_name};
-        use schema::member_of::dsl::{member_of, team as team_id, user as team_member};
+        use schema::application::dsl::{application, name as user_name};
+        use schema::member_of::dsl::{member_of, team as team_id};
         use schema::team::dsl::{name, team};
 
         use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
@@ -244,7 +244,7 @@ impl Team {
                 let team_name = team.find(team_fk).select(name).first(connection)?;
 
                 let member_names: Vec<String> = member_of
-                    .inner_join(application.on(team_member.eq(user_id)))
+                    .inner_join(application)
                     .filter(team_id.eq(team_fk))
                     .select(user_name)
                     .load::<String>(connection)?;
