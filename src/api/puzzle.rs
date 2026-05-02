@@ -27,8 +27,8 @@ use crate::{
 /// Get the puzzle's info
 ///
 /// # Errors
-/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
-/// not on an authorized network.
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated, if they're
+/// not on an authorized network or if the query is malformed.
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/puzzle", fields(method = "GET"))]
 pub async fn get(
@@ -115,8 +115,8 @@ pub async fn get_all_by_category(
 /// Get the puzzle's archive
 ///
 /// # Errors
-/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
-/// not on an authorized network.
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated, if they're
+/// not on an authorized network or if the query is malformed.
 /// Might return an error if there's an issue communicating with the database, if the generator
 /// fails to run or it there's any io issue.
 ///
@@ -204,8 +204,8 @@ pub async fn files(
 /// Register and attempt to solve and check the flag
 ///
 /// # Errors
-/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
-/// not on an authorized network.
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated, if they're
+/// not on an authorized network or if the query is malformed.
 /// Might return an error if there's an issue communicating with the database or if the check fails
 /// to run.
 #[tracing::instrument(skip_all, name = "/v0/puzzle/solve", fields(method = "POST"))]
@@ -223,8 +223,8 @@ pub async fn solve(
 /// Unlock the next clue
 ///
 /// # Errors
-/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated or if they're
-/// not on an authorized network.
+/// Will return an error if the puzzle doesn't exist, if the user is unauthenticated, if they're
+/// not on an authorized network or if the query is malformed.
 /// Might return an error if there's an issue communicating with the database or if the check fails
 /// to run.
 #[tracing::instrument(skip_all, name = "/v0/puzzle/clue/next", fields(method = "POST"))]

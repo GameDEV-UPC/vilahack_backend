@@ -14,7 +14,7 @@ use crate::{
 /// Get the event's details.
 ///
 /// # Errors
-/// Will return an error if the event doesn't exist.
+/// Will return an error if the event doesn't existor if the query is malformed.
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/event", fields(method = "GET"))]
 pub async fn get(
@@ -36,7 +36,8 @@ pub async fn all(State(state): State<Arc<Bstate>>) -> Result<Json<Vec<Event>>, E
 /// Set the check in timestamp for the user
 ///
 /// # Errors
-/// Will return an error if the caller is not an admin and if the user or event don't exist.
+/// Will return an error if the caller is not an admin and if the user or event don't exist, or if
+/// the query is malformed
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/event/participation", fields(method = "PUT"))]
 pub async fn participate(
@@ -54,17 +55,19 @@ pub async fn participate(
 /// Set the check in timestamp for the user
 ///
 /// # Errors
-/// Will return an error if the caller is not an admin or if the user doesn't exist.
+/// Will return an error if the user doesn't exist or if the query is malformed.
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/event/participation/all", fields(method = "GET"))]
 pub async fn participations(
     State(state): State<Arc<Bstate>>,
-    Authenticated { role, .. }: Authenticated,
+    Authenticated { sub, role }: Authenticated,
     Id(id): Id,
 ) -> Result<Json<Vec<Participation>>, ErrorResponse> {
-    if role != CONFIG.jwk.admin_role {
-        return Err(ErrorResponse::insufficient_permissions());
-    }
+    let id = if role == CONFIG.jwk.admin_role {
+        id
+    } else {
+        sub
+    };
 
     Ok(Json(
         Participation::get(id, state.get_connection().await?).await?,
