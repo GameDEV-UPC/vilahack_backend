@@ -4,7 +4,7 @@ use axum::{Json, extract::State};
 
 use crate::{
     State as Bstate,
-    api::{Id, OptionalId},
+    api::{Id, ParticipationFilter},
     authentication::Authenticated,
     config::CONFIG,
     error::ErrorResponse,
@@ -52,26 +52,26 @@ pub async fn participate(
     Ok(Json(participate.post(state.get_connection().await?).await?))
 }
 
-/// Get all the user's participations, ordered by the event's begin time
+/// Get all of the user's or event's participations
 ///
 /// # Errors
-/// Will return an error if the user doesn't exist or if the query is malformed.
+/// Will return an error if the query is malformed.
 /// Might return an error if there's an issue communicating with the database.
 #[tracing::instrument(skip_all, name = "/v0/event/participation/all", fields(method = "GET"))]
 pub async fn participations(
     State(state): State<Arc<Bstate>>,
     Authenticated { sub, role }: Authenticated,
-    OptionalId(id): OptionalId,
+    filter: ParticipationFilter,
 ) -> Result<Json<Vec<Participation>>, ErrorResponse> {
-    let id = if let Some(id) = id
-        && role == CONFIG.jwk.admin_role
-    {
-        id
+    // If no filter is given or if the caller is not an admin, filter by user
+    let filter = if filter == ParticipationFilter::None && role != CONFIG.jwk.admin_role {
+        ParticipationFilter::User(sub)
     } else {
-        sub
+        // If the caller is an admin and they provided a filter, use that one
+        filter
     };
 
     Ok(Json(
-        Participation::get(id, state.get_connection().await?).await?,
+        Participation::get(filter, state.get_connection().await?).await?,
     ))
 }

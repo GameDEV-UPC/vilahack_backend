@@ -7,6 +7,7 @@ use diesel::{insert_into, prelude::*};
 use exn::ResultExt;
 
 use crate::{
+    api::ParticipationFilter,
     database::schema::{self},
     error::Error,
 };
@@ -133,20 +134,32 @@ impl Participation {
     ///
     /// # Errors
     /// Might return an error if there's an issue communicating with the database
-    pub async fn get(uid: Uuid, connection: Connection) -> exn::Result<Vec<Self>, Error> {
+    pub async fn get(
+        filter: ParticipationFilter,
+        connection: Connection,
+    ) -> exn::Result<Vec<Self>, Error> {
         use crate::database::schema::{
             event::dsl::{begins_at, event as event_dsl, id as event_id, name as event_name},
-            participate::dsl::{created_at, participate, user},
+            participate::dsl::{created_at, event as p_event, participate, user},
         };
 
+        let mut query = participate
+            .inner_join(event_dsl)
+            .select((event_id, event_name, begins_at, created_at))
+            .into_boxed::<diesel::pg::Pg>();
+
+        match filter {
+            ParticipationFilter::User(id) => {
+                query = query.filter(user.eq(id));
+            }
+            ParticipationFilter::Event(id) => {
+                query = query.filter(p_event.eq(id));
+            }
+            ParticipationFilter::None => {}
+        }
+
         let participations = connection
-            .interact(move |connection| {
-                participate
-                    .inner_join(event_dsl)
-                    .filter(user.eq(uid))
-                    .select((event_id, event_name, begins_at, created_at))
-                    .get_results(connection)
-            })
+            .interact(move |connection| query.get_results(connection))
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?

@@ -9,8 +9,9 @@ use base64::prelude::{BASE64_STANDARD_NO_PAD, Engine};
 
 use crate::{
     State as Bstate,
-    api::{Id, Name},
+    api::{Id, Name, OptionalId},
     authentication::Authenticated,
+    config::CONFIG,
     error::ErrorResponse,
     model::team::{Team, TeamSummary},
 };
@@ -23,10 +24,16 @@ use crate::{
 #[tracing::instrument(skip_all, name = "/v0/team", fields(method = "GET"))]
 pub async fn summary(
     State(state): State<Arc<Bstate>>,
-    Authenticated { sub, .. }: Authenticated,
+    Authenticated { sub, role }: Authenticated,
+    OptionalId(id): OptionalId,
 ) -> Result<Json<TeamSummary>, ErrorResponse> {
+    let id = match (role == CONFIG.jwk.admin_role, id) {
+        (true, Some(id)) => id,
+        _ => sub,
+    };
+
     Ok(Json(
-        Team::summary(sub, state.get_connection().await?).await?,
+        Team::summary(id, state.get_connection().await?).await?,
     ))
 }
 
