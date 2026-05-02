@@ -4,7 +4,7 @@ use axum::{Json, extract::State};
 
 use crate::{
     State as Bstate,
-    api::Id,
+    api::{Id, OptionalId},
     authentication::Authenticated,
     config::CONFIG,
     error::ErrorResponse,
@@ -24,7 +24,7 @@ pub async fn get(
     Ok(Json(Event::get(id, state.get_connection().await?).await?))
 }
 
-/// Get all the events, sorted by begin date
+/// Get a list of all the events, ordered by begin time
 ///
 /// # Errors
 /// Might return an error if there's an issue communicating with the database.
@@ -33,7 +33,7 @@ pub async fn all(State(state): State<Arc<Bstate>>) -> Result<Json<Vec<Event>>, E
     Ok(Json(Event::all(state.get_connection().await?).await?))
 }
 
-/// Set the check in timestamp for the user
+/// Record the user as participating in that event
 ///
 /// # Errors
 /// Will return an error if the caller is not an admin and if the user or event don't exist, or if
@@ -52,7 +52,7 @@ pub async fn participate(
     Ok(Json(participate.post(state.get_connection().await?).await?))
 }
 
-/// Set the check in timestamp for the user
+/// Get all the user's participations, ordered by the event's begin time
 ///
 /// # Errors
 /// Will return an error if the user doesn't exist or if the query is malformed.
@@ -61,9 +61,11 @@ pub async fn participate(
 pub async fn participations(
     State(state): State<Arc<Bstate>>,
     Authenticated { sub, role }: Authenticated,
-    Id(id): Id,
+    OptionalId(id): OptionalId,
 ) -> Result<Json<Vec<Participation>>, ErrorResponse> {
-    let id = if role == CONFIG.jwk.admin_role {
+    let id = if let Some(id) = id
+        && role == CONFIG.jwk.admin_role
+    {
         id
     } else {
         sub
