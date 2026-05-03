@@ -122,11 +122,16 @@ impl Participate {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct IdNameStarted {
+    id: Uuid,
+    name: String,
+    started: DateTime<Utc>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct Participation {
-    pub event: Uuid,
-    pub name: String,
-    pub began_at: DateTime<Utc>,
-    pub participated_at: DateTime<Utc>,
+    pub event: IdNameStarted,
+    pub user: IdNameStarted,
 }
 
 impl Participation {
@@ -139,18 +144,27 @@ impl Participation {
         connection: Connection,
     ) -> exn::Result<Vec<Self>, Error> {
         use crate::database::schema::{
-            event::dsl::{begins_at, event as event_dsl, id as event_id, name as event_name},
-            participate::dsl::{created_at, event as p_event, participate, user},
+            application::dsl::{application, id as application_id, name as user_name_dsl},
+            event::dsl::{begins_at, event as event_dsl, id as event_id, name as event_name_dsl},
+            participate::dsl::{created_at, event as p_event, participate, user as user_dsl},
         };
 
         let mut query = participate
             .inner_join(event_dsl)
-            .select((event_id, event_name, begins_at, created_at))
+            .inner_join(application)
+            .select((
+                event_id,
+                event_name_dsl,
+                application_id,
+                user_name_dsl,
+                begins_at,
+                created_at,
+            ))
             .into_boxed::<diesel::pg::Pg>();
 
         match filter {
             ParticipationFilter::User(id) => {
-                query = query.filter(user.eq(id));
+                query = query.filter(user_dsl.eq(id));
             }
             ParticipationFilter::Event(id) => {
                 query = query.filter(p_event.eq(id));
@@ -168,12 +182,20 @@ impl Participation {
 
         Ok(participations
             .into_iter()
-            .map(|(event, name, began_at, participated_at)| Self {
-                event,
-                name,
-                began_at,
-                participated_at,
-            })
+            .map(
+                |(event, event_name, user, user_name, began_at, participated_at)| Self {
+                    event: IdNameStarted {
+                        id: event,
+                        name: event_name,
+                        started: began_at,
+                    },
+                    user: IdNameStarted {
+                        id: user,
+                        name: user_name,
+                        started: participated_at,
+                    },
+                },
+            )
             .collect())
     }
 }
