@@ -95,13 +95,15 @@ impl Attempt {
         puzzle: Uuid,
         connection: Connection,
     ) -> exn::Result<i16, Error> {
-        use schema::attempt::dsl::{attempt, clues_used, puzzle as attempt_puzzle};
-        use schema::member_of::dsl::{member_of, user as member_user};
+        use schema::attempt::dsl::{
+            attempt, clues_used, puzzle as attempt_puzzle, team as attempt_team,
+        };
+        use schema::member_of::dsl::{member_of, team as member_team, user as member_user};
 
         connection
             .interact(move |connection| {
                 attempt
-                    .inner_join(member_of)
+                    .inner_join(member_of.on(attempt_team.eq(member_team)))
                     .filter(member_user.eq(user))
                     .filter(attempt_puzzle.eq(puzzle))
                     .select(clues_used)
