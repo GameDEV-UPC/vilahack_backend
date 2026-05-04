@@ -1,6 +1,7 @@
 use std::{fs, net::SocketAddr, path::PathBuf, sync::LazyLock};
 
 use axum::http::HeaderValue;
+use chrono::{DateTime, Utc};
 use ipnet::IpNet;
 use jsonwebtoken::jwk::JwkSet;
 use serde::Deserialize;
@@ -58,12 +59,13 @@ pub struct Config {
     pub bind_address: SocketAddr,
     #[serde(with = "headervalues")]
     pub allowed_origins: Vec<HeaderValue>,
+    pub allowed_ranges: Vec<IpNet>,
 
     pub database_url: String,
     pub jwk: Jwk,
-    pub allowed_ranges: Vec<IpNet>,
 
     pub puzzle_directory: PathBuf,
+    pub scoreboard_hides: DateTime<Utc>,
 
     pub deployment: String,
     #[serde(with = "levelfilter")]
@@ -101,6 +103,7 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         Ok(configuration) => configuration,
         Err(err) => {
             tracing::error!("Could not parse config.toml: {err}");
+            println!("{err}");
             panic!();
         }
     }

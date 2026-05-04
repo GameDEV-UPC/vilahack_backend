@@ -63,6 +63,7 @@ async fn main() {
             get(api::event::participations),
         )
         .route("/v0/event/participation", put(api::event::participate))
+        .route("/v0/scoreboard", get(api::scoreboard::get))
         .layer(cors_layer)
         .with_state(Arc::new(State::new().await));
 

@@ -17,11 +17,14 @@ database_url = "<postgresql_connection_string>" # Add the following options to t
                                                 # sslmode=verify-full 
                                                 # sslrootcert=<path_to_db_cert>
 
-deployment='<arbitary_string>'                  # Used by the observability stack to distinguish
+puzzle_directory = "<puzzle_directory>"
+scoreboard_hides = <iso8601_timestamp>
+
+deployment="<arbitary_string>"                  # Used by the observability stack to distinguish
                                                 # several telemetry sources
 
 
-trace_level='<env_logger_log_filter>'
+trace_level="<env_logger_log_filter>"
 
 [jwk]
 authenticated_audiences = [ "authenticated" ]

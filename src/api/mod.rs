@@ -1,6 +1,7 @@
 pub mod event;
 pub mod preinscription;
 pub mod puzzle;
+pub mod scoreboard;
 pub mod team;
 pub mod user;
 

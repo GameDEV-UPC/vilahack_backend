@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::{collections::HashMap, io::Write};
 
 use chrono::{DateTime, Utc};
 use deadpool_diesel::postgres::Connection;
@@ -6,7 +6,7 @@ use uuid::Uuid;
 
 use diesel::{
     deserialize::{FromSql, FromSqlRow},
-    dsl::sql,
+    dsl::{jsonb_array_length, sql},
     expression::AsExpression,
     insert_into,
     pg::{Pg, PgValue},
@@ -57,6 +57,12 @@ impl ToSql<Jsonb, Pg> for Flags {
             .map(|()| IsNull::No)
             .map_err(Into::into)
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ScoreboardEntry {
+    name: String,
+    score: i64,
 }
 
 #[derive(
@@ -241,5 +247,90 @@ impl Attempt {
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
             .map_err(Error::from)
             .or_raise(|| Error::upstream("Failed to append to the attempt".into()))
+    }
+
+    /// Calculate the scoreboard
+    ///
+    /// # Errors
+    /// May return an error if there's an issue communicating with the database
+    pub async fn scoreboard(
+        filter: Option<Uuid>,
+        connection: Connection,
+    ) -> exn::Result<Vec<ScoreboardEntry>, Error> {
+        let attempts: Vec<(Uuid, String, i16, Option<i32>, i16)> = connection
+            .interact(move |connection| {
+                use schema::attempt::dsl::{
+                    attempt as attempt_dsl, clues_used, puzzle as attempt_puzzle, solved_at,
+                    team as attempt_team,
+                };
+                use schema::puzzle::dsl::{clues, id as puzzle_id, points, puzzle};
+                use schema::team::dsl::{id as team_id, name as team_name, team};
+
+                let mut query = attempt_dsl
+                    .filter(solved_at.is_not_null())
+                    .inner_join(team.on(attempt_team.eq(team_id)))
+                    .inner_join(puzzle.on(attempt_puzzle.eq(puzzle_id)))
+                    .select((
+                        attempt_team,
+                        team_name,
+                        points,
+                        jsonb_array_length(clues),
+                        clues_used,
+                    ))
+                    .into_boxed();
+
+                if let Some(team_filter) = filter {
+                    query = query.filter(attempt_team.eq(team_filter));
+                }
+
+                query.get_results(connection)
+            })
+            .await
+            .map_err(Error::from) // Això és una mica lleig però bueno
+            .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
+            .map_err(Error::from)
+            .or_raise(|| Error::upstream("Failed to append to the attempt".into()))?;
+
+        let mut scores: HashMap<Uuid, (String, Vec<f64>)> = HashMap::new();
+        for (team_id, team_name, puzzle_points, clue_count, clues_used) in attempts {
+            let clue_count = match clue_count {
+                Some(0) => continue,
+                Some(n) => f64::from(n),
+                _ => continue,
+            };
+
+            let clues_used = f64::from(clues_used);
+            let clues_used = if (clues_used - clue_count).abs() < 0.01 {
+                clues_used + 1.0
+            } else {
+                clues_used
+            };
+
+            let puzzle_points = f64::from(puzzle_points);
+
+            let substracted = puzzle_points * ((clues_used / (clue_count + 1.0)) * 0.4);
+
+            let score = puzzle_points - substracted;
+
+            if let Some((_, score_set)) = scores.get_mut(&team_id) {
+                score_set.push(score);
+            } else {
+                scores.insert(team_id, (team_name, vec![score]));
+            }
+        }
+
+        let mut scoreboard: Vec<ScoreboardEntry> = Vec::new();
+        for (name, score_set) in scores.values() {
+            scoreboard.push(ScoreboardEntry {
+                name: name.clone(),
+                #[allow(clippy::cast_possible_truncation)]
+                score: score_set.iter().sum::<f64>().round() as i64,
+            });
+        }
+
+        scoreboard.sort_by_key(|v| v.score);
+        scoreboard.reverse();
+
+        Ok(scoreboard)
     }
 }
