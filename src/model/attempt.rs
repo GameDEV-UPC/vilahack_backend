@@ -61,6 +61,7 @@ impl ToSql<Jsonb, Pg> for Flags {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ScoreboardEntry {
+    id: Uuid,
     name: String,
     score: i64,
 }
@@ -320,8 +321,9 @@ impl Attempt {
         }
 
         let mut scoreboard: Vec<ScoreboardEntry> = Vec::new();
-        for (name, score_set) in scores.values() {
+        for (id, (name, score_set)) in scores {
             scoreboard.push(ScoreboardEntry {
+                id,
                 name: name.clone(),
                 #[allow(clippy::cast_possible_truncation)]
                 score: score_set.iter().sum::<f64>().round() as i64,
