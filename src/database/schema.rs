@@ -80,7 +80,6 @@ diesel::table! {
     team (id) {
         id -> Uuid,
         name -> Text,
-        score -> Int4,
     }
 }
 

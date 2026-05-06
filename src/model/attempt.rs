@@ -309,7 +309,7 @@ impl Attempt {
 
             let puzzle_points = f64::from(puzzle_points);
 
-            let substracted = puzzle_points * ((clues_used / (clue_count + 1.0)) * 0.4);
+            let substracted = puzzle_points * ((clues_used / (clue_count + 1.0)) * 0.35);
 
             let score = puzzle_points - substracted;
 

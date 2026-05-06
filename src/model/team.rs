@@ -30,7 +30,6 @@ pub struct MemberOf {
 pub struct Team {
     pub id: Uuid,
     pub name: String,
-    pub score: i32,
 }
 
 #[derive(serde::Serialize)]
