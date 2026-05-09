@@ -18,6 +18,7 @@ use crate::{
     discrimination::Discriminate,
     error::ErrorResponse,
     model::{
+        application::{Application, Status},
         attempt::Attempt,
         puzzle::{Category, Puzzle},
         team::Team,
@@ -217,7 +218,19 @@ pub async fn solve(
 ) -> Result<(), ErrorResponse> {
     let team = Team::id(sub, state.get_connection().await?).await?;
 
-    Ok(Puzzle::solve(query.id, team, query.flag, state.get_connection().await?).await?)
+    match Puzzle::solve(query.id, team, query.flag, state.get_connection().await?).await {
+        Ok(()) => {
+            Application::change_status(
+                sub,
+                vec![Status::Confirmed, Status::Participating],
+                Status::Participating,
+                state.get_connection().await?,
+            )
+            .await?;
+            Ok(())
+        }
+        Err(err) => Err(err.into()),
+    }
 }
 
 /// Unlock the next clue

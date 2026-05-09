@@ -66,6 +66,7 @@ pub struct Config {
 
     pub puzzle_directory: PathBuf,
     pub scoreboard_hides: DateTime<Utc>,
+    pub cake: uuid::Uuid,
 
     pub deployment: String,
     #[serde(with = "levelfilter")]

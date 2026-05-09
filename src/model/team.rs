@@ -154,10 +154,22 @@ impl Team {
     /// Will return an error if the user doesn't belong to the team.
     /// Might return an error if there's an issue communicating with the database
     pub async fn leave(user: Uuid, connection: PgConnection) -> exn::Result<(), Error> {
+        use schema::application::dsl::{application, status};
         use schema::member_of::dsl::member_of;
 
         match connection
-            .interact(move |connection| diesel::delete(member_of.find(user)).execute(connection))
+            .interact(move |connection| {
+                match application.find(user).select(status).first(connection)? {
+                    Status::Applied | Status::Accepted | Status::Confirmed => (),
+                    _ => {
+                        return Err(DieselError::DatabaseError(
+                            DbErrKind::CheckViolation,
+                            Box::<String>::new("The user can no longer leave a team".into()),
+                        ));
+                    }
+                }
+                diesel::delete(member_of.find(user)).execute(connection)
+            })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?
@@ -267,10 +279,23 @@ impl Team {
     /// Will return an error if the user is not in any team
     /// Might return an error if there's an issue communicating with the database
     pub async fn id(uid: Uuid, connection: PgConnection) -> exn::Result<Uuid, Error> {
+        use schema::application::dsl::{application, status};
         use schema::member_of::dsl::{member_of, team};
 
         connection
-            .interact(move |connection| member_of.find(uid).select(team).first::<Uuid>(connection))
+            .interact(move |connection| {
+                match application.find(uid).select(status).first(connection)? {
+                    Status::Confirmed | Status::Participating => (),
+                    _ => {
+                        return Err(DieselError::DatabaseError(
+                            DbErrKind::CheckViolation,
+                            Box::<String>::new("The user isn't confirmed or participating".into()),
+                        ));
+                    }
+                }
+
+                member_of.find(uid).select(team).first::<Uuid>(connection)
+            })
             .await
             .map_err(Error::from) // Això és una mica lleig però bueno
             .or_raise(|| Error::upstream("Failed to interact with connection pool".into()))?

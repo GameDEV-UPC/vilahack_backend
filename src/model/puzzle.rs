@@ -372,36 +372,43 @@ impl Puzzle {
         flag: String,
         connection: Connection,
     ) -> exn::Result<(), Error> {
-        let puzzle_path = {
-            let mut path = CONFIG.puzzle_directory.clone();
-            path.push(puzzle.to_string());
-            path
+        let correct = if puzzle == CONFIG.cake {
+            let contents = team.to_u128_le() ^ puzzle.to_u128_le();
+            let expected_flag = format!("vf[{contents}]");
+
+            flag == expected_flag
+        } else {
+            let puzzle_path = {
+                let mut path = CONFIG.puzzle_directory.clone();
+                path.push(puzzle.to_string());
+                path
+            };
+
+            let status = Command::new("nix")
+                .args([
+                    "--extra-experimental-features",
+                    "nix-command",
+                    "--extra-experimental-features",
+                    "flakes",
+                    "develop",
+                    "--command",
+                    "bash",
+                    "check.sh",
+                    &team.to_string(),
+                    &flag,
+                ])
+                .current_dir(puzzle_path)
+                .status();
+
+            let Ok(status) = status else {
+                return Err(exn::Exn::new(Error::puzzle(
+                    PuzzleError::Generator,
+                    format!("Could not run check: {status:?}"),
+                )));
+            };
+
+            status.success()
         };
-
-        let status = Command::new("nix")
-            .args([
-                "--extra-experimental-features",
-                "nix-command",
-                "--extra-experimental-features",
-                "flakes",
-                "develop",
-                "--command",
-                "bash",
-                "check.sh",
-                &team.to_string(),
-                &flag,
-            ])
-            .current_dir(puzzle_path)
-            .status();
-
-        let Ok(status) = status else {
-            return Err(exn::Exn::new(Error::puzzle(
-                PuzzleError::Generator,
-                format!("Could not run check: {status:?}"),
-            )));
-        };
-
-        let correct = status.success();
 
         Attempt::append(connection, puzzle, team, flag, correct).await?;
 
